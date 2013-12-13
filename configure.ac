@@ -3,7 +3,7 @@ AC_PREREQ([2.68])
 
 dnl The libmbim version number
 m4_define([mbim_major_version], [1])
-m4_define([mbim_minor_version], [5])
+m4_define([mbim_minor_version], [7])
 m4_define([mbim_micro_version], [0])
 m4_define([mbim_version],
           [mbim_major_version.mbim_minor_version.mbim_micro_version])
@@ -17,7 +17,7 @@ dnl            with old code), increment a.
 dnl        If the interface has changed in an incompatible way (that is,
 dnl            functions have changed or been removed), then zero a.
 m4_define([mbim_glib_lt_current],  [2])
-m4_define([mbim_glib_lt_revision], [0])
+m4_define([mbim_glib_lt_revision], [1])
 m4_define([mbim_glib_lt_age],      [2])
 
 
@@ -98,17 +98,18 @@ AC_CONFIG_FILES([Makefile
                  data/Makefile
                  data/pkg-config/Makefile
                  data/pkg-config/mbim-glib.pc
-                 libmbim-glib/Makefile
-                 libmbim-glib/mbim-version.h
-                 libmbim-glib/generated/Makefile
-                 libmbim-glib/test/Makefile
-                 cli/Makefile
+                 src/Makefile
+                 src/libmbim-glib/Makefile
+                 src/libmbim-glib/mbim-version.h
+                 src/libmbim-glib/generated/Makefile
+                 src/libmbim-glib/test/Makefile
+                 src/mbimcli/Makefile
                  utils/Makefile
                  docs/Makefile
                  docs/reference/Makefile
                  docs/reference/libmbim-glib/Makefile
                  docs/reference/libmbim-glib/version.xml
-		 docs/man/Makefile])
+                 docs/man/Makefile])
 AC_OUTPUT
 
 echo "
