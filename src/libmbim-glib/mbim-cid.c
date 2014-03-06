@@ -27,6 +27,7 @@
 /**
  * SECTION: mbim-cid
  * @title: Command IDs
+ * @short_description: Generic command handling routines.
  *
  * This section defines the interface of the known command IDs.
  */
@@ -58,7 +59,7 @@ static const CidConfig cid_basic_connect_config [MBIM_CID_BASIC_CONNECT_LAST] = 
     { FALSE, TRUE,  FALSE }, /* MBIM_CID_BASIC_CONNECT_DEVICE_SERVICES */
     { FALSE, FALSE, FALSE }, /* 17 reserved */
     { FALSE, FALSE, FALSE }, /* 18 reserved */
-    { TRUE,  FALSE, FALSE }, /* MBIM_CID_BASIC_CONNECT_DEVICE_SERVICE_SUBSCRIBER_LIST */
+    { TRUE,  FALSE, FALSE }, /* MBIM_CID_BASIC_CONNECT_DEVICE_SERVICE_SUBSCRIBE_LIST */
     { FALSE, TRUE,  FALSE }, /* MBIM_CID_BASIC_CONNECT_PACKET_STATISTICS */
     { TRUE,  TRUE,  FALSE }, /* MBIM_CID_BASIC_CONNECT_NETWORK_IDLE_HINT */
     { FALSE, TRUE,  TRUE  }, /* MBIM_CID_BASIC_CONNECT_EMERGENCY_MODE */
