@@ -3,6 +3,12 @@
 *.lo
 *.la
 *.bz2
+*.swp
+tags
+.*DS_Store
+.deps
+.libs
+.__autoconf_trace_data
 
 ChangeLog
 INSTALL
@@ -65,6 +71,7 @@ src/libmbim-glib/test/test-message
 src/libmbim-glib/test/test-fragment
 src/libmbim-glib/test/test-message-parser
 src/libmbim-glib/test/test-message-builder
+src/libmbim-glib/test/test-proxy-helpers
 src/libmbim-glib/test/*.log
 src/libmbim-glib/test/*.trs
 
@@ -79,3 +86,5 @@ src/mbimcli/.libs
 src/mbimcli/mbimcli
 
 utils/mbim-network
+
+src/mbim-proxy/mbim-proxy
