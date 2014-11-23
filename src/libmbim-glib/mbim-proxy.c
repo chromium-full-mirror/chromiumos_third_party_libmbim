@@ -25,12 +25,14 @@
 #include <string.h>
 #include <ctype.h>
 #include <sys/file.h>
+#include <sys/types.h>
 #include <errno.h>
 
 #include <glib.h>
 #include <glib/gstdio.h>
 #include <gio/gunixsocketaddress.h>
 
+#include "config.h"
 #include "mbim-device.h"
 #include "mbim-utils.h"
 #include "mbim-proxy.h"
@@ -1060,10 +1062,12 @@ incoming_cb (GSocketService *service,
         return;
     }
 
-    if (uid != 0) {
-        g_warning ("Client not allowed: Not enough privileges");
+    if (!__mbim_user_allowed (uid, &error)) {
+        g_warning ("Client not allowed: %s", error->message);
+        g_error_free (error);
         return;
     }
+
 
     /* Create client */
     client = g_slice_new0 (Client);
@@ -1077,7 +1081,7 @@ incoming_cb (GSocketService *service,
                            (GSourceFunc)connection_readable_cb,
                            client,
                            NULL);
-    g_source_attach (client->connection_readable_source, NULL);
+    g_source_attach (client->connection_readable_source, g_main_context_get_thread_default ());
 
     /* Keep the client info around */
     track_client (self, client);
@@ -1214,12 +1218,7 @@ mbim_proxy_new (GError **error)
 {
     MbimProxy *self;
 
-    /* Only root can run the mbim-proxy */
-    if (getuid () != 0) {
-        g_set_error (error,
-                     MBIM_CORE_ERROR,
-                     MBIM_CORE_ERROR_FAILED,
-                     "Not enough privileges");
+    if (!__mbim_user_allowed (getuid(), error)) {
         return NULL;
     }
 

@@ -96,6 +96,12 @@ AC_SUBST(GLIB_MKENUMS)
 dnl Documentation
 GTK_DOC_CHECK(1.0)
 
+# MBIM username
+AC_ARG_ENABLE(mbim-username,
+              AS_HELP_STRING([--enable-mbim-username=<username>], [user allowed to access MBIM devices]),,
+              enable_mbim_username="root")
+AC_DEFINE_UNQUOTED(MBIM_USERNAME, "$enable_mbim_username", [Define the MBIM username])
+
 dnl Man page
 AC_PATH_PROG(HELP2MAN, help2man, false)
 AM_CONDITIONAL(BUILDOPT_MAN, test x$HELP2MAN != xfalse)
@@ -126,8 +132,10 @@ echo "
     libmbim $VERSION
     ==============================================
 
-    compiler:                ${CC}
-    cflags:                  ${CFLAGS}
-    Maintainer mode:         ${USE_MAINTAINER_MODE}
-    Documentation:           ${enable_gtk_doc}
+    compiler:         ${CC}
+    cflags:           ${CFLAGS}
+    Maintainer mode:  ${USE_MAINTAINER_MODE}
+    Documentation:    ${enable_gtk_doc}
+    MBIM username:    ${enable_mbim_username}
+
 "

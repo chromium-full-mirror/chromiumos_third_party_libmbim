@@ -97,7 +97,7 @@ struct _MbimDevicePrivate {
 
     /* I/O channel, set when the file is open */
     GIOChannel *iochannel;
-    guint watch_id;
+    GSource *iochannel_source;
     GByteArray *response;
     OpenStatus open_status;
 
@@ -143,7 +143,7 @@ typedef struct {
     MbimMessageType type;
     guint32 transaction_id;
     GSimpleAsyncResult *result;
-    guint timeout_id;
+    GSource *timeout_source;
     GCancellable *cancellable;
     gulong cancellable_id;
     TransactionWaitContext *wait_ctx;
@@ -176,8 +176,8 @@ static void
 transaction_complete_and_free (Transaction  *tr,
                                const GError *error)
 {
-    if (tr->timeout_id)
-        g_source_remove (tr->timeout_id);
+    if (tr->timeout_source)
+        g_source_destroy (tr->timeout_source);
 
     if (tr->cancellable) {
         if (tr->cancellable_id)
@@ -236,7 +236,7 @@ transaction_timed_out (TransactionWaitContext *ctx)
         /* transaction already completed */
         return FALSE;
 
-    tr->timeout_id = 0;
+    tr->timeout_source = NULL;
 
     /* If no fragment was received, complete transaction with a timeout error */
     if (!tr->fragments)
@@ -299,10 +299,11 @@ device_store_transaction (MbimDevice       *self,
     tr->wait_ctx->type = type;
 
     /* don't add timeout if one already exists */
-    if (!tr->timeout_id) {
-        tr->timeout_id = g_timeout_add (timeout_ms,
-                                        (GSourceFunc)transaction_timed_out,
-                                        tr->wait_ctx);
+    if (!tr->timeout_source) {
+        tr->timeout_source = g_timeout_source_new (timeout_ms);
+        g_source_set_callback (tr->timeout_source, (GSourceFunc)transaction_timed_out, tr->wait_ctx, NULL);
+        g_source_attach (tr->timeout_source, g_main_context_get_thread_default ());
+        g_source_unref (tr->timeout_source);
     }
 
     if (tr->cancellable && !tr->cancellable_id) {
@@ -673,7 +674,7 @@ data_available (GIOChannel *source,
             }
 
             /* Port is closed; we're done */
-            if (self->priv->watch_id == 0)
+            if (!self->priv->iochannel_source)
                 break;
         }
 
@@ -868,10 +869,13 @@ setup_iochannel (CreateIoChannelContext *ctx)
         return;
     }
 
-    ctx->self->priv->watch_id = g_io_add_watch (ctx->self->priv->iochannel,
-                                                G_IO_IN | G_IO_ERR | G_IO_HUP,
-                                                (GIOFunc)data_available,
-                                                ctx->self);
+    ctx->self->priv->iochannel_source = g_io_create_watch (ctx->self->priv->iochannel,
+                                                           G_IO_IN | G_IO_ERR | G_IO_HUP);
+    g_source_set_callback (ctx->self->priv->iochannel_source,
+                           (GSourceFunc)data_available,
+                           ctx->self,
+                           NULL);
+    g_source_attach (ctx->self->priv->iochannel_source, g_main_context_get_thread_default ());
 
     g_simple_async_result_set_op_res_gboolean (ctx->result, TRUE);
     create_iochannel_context_complete_and_free (ctx);
@@ -959,6 +963,7 @@ create_iochannel_with_socket (CreateIoChannelContext *ctx)
 
     if (!ctx->self->priv->socket_connection) {
         gchar **argc;
+        GSource *source;
 
         g_debug ("cannot connect to proxy: %s", error->message);
         g_clear_error (&error);
@@ -993,7 +998,10 @@ create_iochannel_with_socket (CreateIoChannelContext *ctx)
         g_strfreev (argc);
 
         /* Wait some ms and retry */
-        g_timeout_add (100, (GSourceFunc)wait_for_proxy_cb, ctx);
+        source = g_timeout_source_new (100);
+        g_source_set_callback (source, (GSourceFunc)wait_for_proxy_cb, ctx, NULL);
+        g_source_attach (source, g_main_context_get_thread_default ());
+        g_source_unref (source);
         return;
     }
 
@@ -1404,9 +1412,10 @@ destroy_iochannel (MbimDevice  *self,
     g_clear_object (&self->priv->socket_connection);
     g_clear_object (&self->priv->socket_client);
 
-    if (self->priv->watch_id) {
-        g_source_remove (self->priv->watch_id);
-        self->priv->watch_id = 0;
+    if (self->priv->iochannel_source) {
+        g_source_destroy (self->priv->iochannel_source);
+        g_source_unref (self->priv->iochannel_source);
+        self->priv->iochannel_source = NULL;
     }
 
     if (self->priv->response) {
@@ -1782,6 +1791,7 @@ device_report_error (MbimDevice   *self,
                      const GError *error)
 {
     ReportErrorContext *ctx;
+    GSource *source;
 
     /* Only protocol errors to be reported to the modem */
     if (error->domain != MBIM_PROTOCOL_ERROR)
@@ -1791,7 +1801,10 @@ device_report_error (MbimDevice   *self,
     ctx->self = g_object_ref (self);
     ctx->message = mbim_message_error_new (transaction_id, error->code);
 
-    g_idle_add ((GSourceFunc) device_report_error_in_idle, ctx);
+    source = g_idle_source_new ();
+    g_source_set_callback (source, (GSourceFunc)device_report_error_in_idle, ctx, NULL);
+    g_source_attach (source, g_main_context_get_thread_default ());
+    g_source_unref (source);
 }
 
 /*****************************************************************************/
