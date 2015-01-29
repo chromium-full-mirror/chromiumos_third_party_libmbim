@@ -39,6 +39,7 @@
 #include "mbim-message.h"
 #include "mbim-message-private.h"
 #include "mbim-error-types.h"
+#include "mbim-enum-types.h"
 #include "mbim-proxy.h"
 #include "mbim-proxy-control.h"
 
@@ -139,6 +140,7 @@ typedef struct {
 } TransactionWaitContext;
 
 typedef struct {
+    MbimDevice *self;
     MbimMessage *fragments;
     MbimMessageType type;
     guint32 transaction_id;
@@ -148,6 +150,22 @@ typedef struct {
     gulong cancellable_id;
     TransactionWaitContext *wait_ctx;
 } Transaction;
+
+/* #define TRACE_TRANSACTION 1 */
+#ifdef TRACE_TRANSACTION
+static void
+trace_transaction (Transaction *tr,
+                   const gchar *state)
+{
+    g_debug ("[%s,%u] transaction %s: %s",
+             tr->self->priv->path_display,
+             tr->transaction_id,
+             mbim_message_type_get_string (tr->type),
+             state);
+}
+#else
+# define trace_transaction(...)
+#endif
 
 static Transaction *
 transaction_new (MbimDevice          *self,
@@ -162,12 +180,15 @@ transaction_new (MbimDevice          *self,
     tr = g_slice_new0 (Transaction);
     tr->type = type;
     tr->transaction_id = transaction_id;
+    tr->self = g_object_ref (self);
     tr->result = g_simple_async_result_new (G_OBJECT (self),
                                             callback,
                                             user_data,
                                             transaction_new);
     if (cancellable)
         tr->cancellable = g_object_ref (cancellable);
+
+    trace_transaction (tr, "new");
 
     return tr;
 }
@@ -189,10 +210,12 @@ transaction_complete_and_free (Transaction  *tr,
         g_slice_free (TransactionWaitContext, tr->wait_ctx);
 
     if (error) {
+        trace_transaction (tr, "complete: response");
         g_simple_async_result_set_from_error (tr->result, error);
         if (tr->fragments)
             mbim_message_unref (tr->fragments);
     } else {
+        trace_transaction (tr, "complete: error");
         g_assert (tr->fragments != NULL);
         g_simple_async_result_set_op_res_gpointer (tr->result,
                                                    tr->fragments,
@@ -201,6 +224,7 @@ transaction_complete_and_free (Transaction  *tr,
 
     g_simple_async_result_complete_in_idle (tr->result);
     g_object_unref (tr->result);
+    g_object_unref (tr->self);
     g_slice_free (Transaction, tr);
 }
 
@@ -212,14 +236,18 @@ device_release_transaction (MbimDevice      *self,
 {
     Transaction *tr = NULL;
 
+    /* Only return transaction if it was released from the HT */
     if (self->priv->transactions[type]) {
         tr = g_hash_table_lookup (self->priv->transactions[type], GUINT_TO_POINTER (transaction_id));
-        if (tr && ((tr->type == expected_type) || (expected_type == MBIM_MESSAGE_TYPE_INVALID)))
+        if (tr && ((tr->type == expected_type) || (expected_type == MBIM_MESSAGE_TYPE_INVALID))) {
             /* If found, remove it from the HT */
+            trace_transaction (tr, "release");
             g_hash_table_remove (self->priv->transactions[type], GUINT_TO_POINTER (transaction_id));
+            return tr;
+        }
     }
 
-    return tr;
+    return NULL;
 }
 
 static gboolean
@@ -289,6 +317,8 @@ device_store_transaction (MbimDevice       *self,
                           guint             timeout_ms,
                           GError          **error)
 {
+    trace_transaction (tr, "store");
+
     if (G_UNLIKELY (!self->priv->transactions[type]))
         self->priv->transactions[type] = g_hash_table_new (g_direct_hash, g_direct_equal);
 
@@ -567,7 +597,18 @@ process_message (MbimDevice  *self,
     }
 
     case MBIM_MESSAGE_TYPE_FUNCTION_ERROR: {
+        Transaction *tr;
         GError *error_indication;
+
+        /* Try to match this transaction just per transaction ID */
+        tr = device_release_transaction (self,
+                                         TRANSACTION_TYPE_HOST,
+                                         MBIM_MESSAGE_TYPE_INVALID,
+                                         mbim_message_get_transaction_id (message));
+
+        if (!tr)
+            g_debug ("[%s] No transaction matched in received function error message",
+                     self->priv->path_display);
 
         if (mbim_utils_get_traces_enabled ()) {
             gchar *printable;
@@ -579,6 +620,14 @@ process_message (MbimDevice  *self,
             g_free (printable);
         }
 
+        if (tr) {
+            if (tr->fragments)
+                mbim_message_unref (tr->fragments);
+            tr->fragments = mbim_message_dup (message);
+            transaction_complete_and_free (tr, NULL);
+        }
+
+        /* Signals are emitted regardless of whether the transaction matched or not */
         error_indication = mbim_message_error_get_error (message);
         g_signal_emit (self, signals[SIGNAL_ERROR], 0, error_indication);
         g_error_free (error_indication);
@@ -618,6 +667,11 @@ parse_response (MbimDevice *self)
 
         /* Play with the received message */
         process_message (self, message);
+
+        /* If we were force-closed during the processing of a message, we'd be
+         * losing the response array directly, so check just in case */
+        if (!self->priv->response)
+            break;
 
         /* Remove message from buffer */
         g_byte_array_remove_range (self->priv->response, 0, in_length);
@@ -1152,7 +1206,7 @@ open_message_ready (MbimDevice        *self,
         return;
     }
 
-    if (!mbim_message_open_done_get_result (response, &error)) {
+    if (!mbim_message_response_get_result (response, MBIM_MESSAGE_TYPE_OPEN_DONE, &error)) {
         g_debug ("getting open done result failed: closed");
         self->priv->open_status = OPEN_STATUS_CLOSED;
         device_open_context_complete_and_free (ctx, error);
@@ -1496,9 +1550,7 @@ close_message_ready (MbimDevice         *self,
     response = mbim_device_command_finish (self, res, &error);
     if (!response)
         g_simple_async_result_take_error (ctx->result, error);
-    else if (!mbim_message_close_done_get_result (response, &error))
-        g_simple_async_result_take_error (ctx->result, error);
-    else if (!destroy_iochannel (self, &error))
+    else if (!mbim_message_response_get_result (response, MBIM_MESSAGE_TYPE_CLOSE_DONE, &error))
         g_simple_async_result_take_error (ctx->result, error);
     else
         g_simple_async_result_set_op_res_gboolean (ctx->result, TRUE);
