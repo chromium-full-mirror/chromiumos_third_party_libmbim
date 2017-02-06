@@ -381,6 +381,7 @@ class Message:
             translations['struct'] = field['struct-type'] if 'struct-type' in field else ''
             translations['struct_underscore'] = utils.build_underscore_name_from_camelcase (translations['struct'])
             translations['array_size'] = field['array-size'] if 'array-size' in field else ''
+            translations['pad_array'] = field['pad-array'] if 'pad-array' in field else 'TRUE'
 
             inner_template = ''
             if 'available-if' in field:
@@ -394,13 +395,13 @@ class Message:
                 inner_template += ('    {\n')
 
             if field['format'] == 'byte-array':
-                inner_template += ('        _mbim_message_command_builder_append_byte_array (builder, FALSE, FALSE, ${field}, ${array_size});\n')
+                inner_template += ('        _mbim_message_command_builder_append_byte_array (builder, FALSE, FALSE, ${pad_array}, ${field}, ${array_size});\n')
             elif field['format'] == 'unsized-byte-array':
-                inner_template += ('        _mbim_message_command_builder_append_byte_array (builder, FALSE, FALSE, ${field}, ${field}_size);\n')
+                inner_template += ('        _mbim_message_command_builder_append_byte_array (builder, FALSE, FALSE, ${pad_array}, ${field}, ${field}_size);\n')
             elif field['format'] == 'ref-byte-array':
-                inner_template += ('        _mbim_message_command_builder_append_byte_array (builder, TRUE, TRUE, ${field}, ${field}_size);\n')
+                inner_template += ('        _mbim_message_command_builder_append_byte_array (builder, TRUE, TRUE, ${pad_array}, ${field}, ${field}_size);\n')
             elif field['format'] == 'ref-byte-array-no-offset':
-                inner_template += ('        _mbim_message_command_builder_append_byte_array (builder, FALSE, TRUE, ${field}, ${field}_size);\n')
+                inner_template += ('        _mbim_message_command_builder_append_byte_array (builder, FALSE, TRUE, ${pad_array}, ${field}, ${field}_size);\n')
             elif field['format'] == 'uuid':
                 inner_template += ('        _mbim_message_command_builder_append_uuid (builder, ${field});\n')
             elif field['format'] == 'guint32':
@@ -449,7 +450,7 @@ class Message:
     Emit message parser
     """
     def _emit_message_parser(self, hfile, cfile, message_type, fields):
-        translations = { 'name'                     : self.name,
+        translations = { 'message'                  : self.name,
                          'service'                  : self.service,
                          'underscore'               : utils.build_underscore_name (self.fullname),
                          'message_type'             : message_type,
@@ -568,7 +569,7 @@ class Message:
         template += (
             ' * @error: return location for error or %NULL.\n'
             ' *\n'
-            ' * Create a new request for the \'${name}\' ${message_type} command in the \'${service}\' service.\n'
+            ' * Parses and returns parameters of the \'${message}\' ${message_type} command in the \'${service}\' service.\n'
             ' *\n'
             ' * Returns: %TRUE if the message was correctly parsed, %FALSE if @error is set.\n'
             ' */\n'

@@ -43,6 +43,24 @@
 
 /*****************************************************************************/
 
+static void
+bytearray_apply_padding (GByteArray *buffer,
+                         guint32    *len)
+{
+    static const guint8 padding = 0;
+
+    g_assert (buffer);
+    g_assert (len);
+
+    /* Apply padding to the requested length until multiple of 4 */
+    while (*len % 4 != 0) {
+        g_byte_array_append (buffer, &padding, 1);
+        (*len)++;
+    }
+}
+
+/*****************************************************************************/
+
 GType
 mbim_message_get_type (void)
 {
@@ -175,6 +193,8 @@ _mbim_message_read_string (const MbimMessage *self,
     gchar *str;
     GError *error = NULL;
     guint32 information_buffer_offset;
+    gunichar2 *utf16d = NULL;
+    const gunichar2 *utf16 = NULL;
 
     information_buffer_offset = _mbim_message_get_information_buffer_offset (self);
 
@@ -189,19 +209,28 @@ _mbim_message_read_string (const MbimMessage *self,
     if (!size)
         return NULL;
 
-    str = g_convert (G_STRUCT_MEMBER_P (
-                         self->data,
-                         (information_buffer_offset + struct_start_offset + offset)),
-                     size,
-                     "utf-8",
-                     "utf-16le",
-                     NULL,
-                     NULL,
-                     &error);
+    utf16 = (const gunichar2 *) G_STRUCT_MEMBER_P (self->data, (information_buffer_offset + struct_start_offset + offset));
+
+    /* For BE systems, convert from LE to BE */
+    if (G_BYTE_ORDER == G_BIG_ENDIAN) {
+        guint i;
+
+        utf16d = (gunichar2 *) g_malloc (size);
+        for (i = 0; i < (size / 2); i++)
+            utf16d[i] = GUINT16_FROM_LE (utf16[i]);
+    }
+
+    str = g_utf16_to_utf8 (utf16d ? utf16d : utf16,
+                           size / 2,
+                           NULL,
+                           NULL,
+                           &error);
     if (error) {
         g_warning ("Error converting string: %s", error->message);
         g_error_free (error);
     }
+
+    g_free (utf16d);
 
     return str;
 }
@@ -492,6 +521,7 @@ void
 _mbim_struct_builder_append_byte_array (MbimStructBuilder *builder,
                                         gboolean           with_offset,
                                         gboolean           with_length,
+                                        gboolean           pad_buffer,
                                         const guint8      *buffer,
                                         guint32            buffer_len)
 {
@@ -501,12 +531,8 @@ _mbim_struct_builder_append_byte_array (MbimStructBuilder *builder,
      */
     if (!with_offset && !with_length) {
         g_byte_array_append (builder->fixed_buffer, buffer, buffer_len);
-        while (buffer_len % 4 != 0) {
-            const guint8 padding = 0;
-
-            g_byte_array_append (builder->fixed_buffer, &padding, 1);
-            buffer_len++;
-        }
+        if (pad_buffer)
+            bytearray_apply_padding (builder->fixed_buffer, &buffer_len);
         return;
     }
 
@@ -550,12 +576,9 @@ _mbim_struct_builder_append_byte_array (MbimStructBuilder *builder,
     if (buffer_len) {
         g_byte_array_append (builder->variable_buffer, (const guint8 *)buffer, (guint)buffer_len);
 
-        while (buffer_len % 4 != 0) {
-            const guint8 padding = 0;
-
-            g_byte_array_append (builder->variable_buffer, &padding, 1);
-            buffer_len++;
-        }
+        /* Note: adding zero padding causes trouble for QMI service */
+        if (pad_buffer)
+            bytearray_apply_padding (builder->variable_buffer, &buffer_len);
     }
 }
 
@@ -629,32 +652,34 @@ _mbim_struct_builder_append_string (MbimStructBuilder *builder,
 {
     guint32 offset;
     guint32 length;
-    gchar *utf16le = NULL;
-    gsize utf16le_bytes = 0;
+    gunichar2 *utf16 = NULL;
+    guint32 utf16_bytes = 0;
     GError *error = NULL;
 
     /* A string consists of Offset+Size in the static buffer, plus the
      * string itself in the variable buffer */
 
-    /* Convert the string from UTF-8 to UTF-16LE */
+    /* Convert the string from UTF-8 to UTF-16HE */
     if (value && value[0]) {
-        utf16le = g_convert (value,
-                             -1,
-                             "utf-16le",
-                             "utf-8",
-                             NULL,
-                             &utf16le_bytes,
-                             &error);
-        if (error) {
+        glong items_written = 0;
+
+        utf16 = g_utf8_to_utf16 (value,
+                                 -1,
+                                 NULL, /* bytes */
+                                 &items_written, /* gunichar2 */
+                                 &error);
+        if (!utf16) {
             g_warning ("Error converting string: %s", error->message);
             g_error_free (error);
             return;
         }
+
+        utf16_bytes = items_written * 2;
     }
 
     /* If string length is greater than 0, add the offset to fix, otherwise set
      * the offset to 0 and don't configure the update */
-    if (utf16le_bytes == 0) {
+    if (utf16_bytes == 0) {
         offset = 0;
         g_byte_array_append (builder->fixed_buffer, (guint8 *)&offset, sizeof (offset));
     } else {
@@ -672,20 +697,22 @@ _mbim_struct_builder_append_string (MbimStructBuilder *builder,
     }
 
     /* Add the length value */
-    length = GUINT32_TO_LE ((guint32)utf16le_bytes);
+    length = GUINT32_TO_LE (utf16_bytes);
     g_byte_array_append (builder->fixed_buffer, (guint8 *)&length, sizeof (length));
 
     /* And finally, the string itself to the variable buffer */
-    if (utf16le_bytes) {
-        g_byte_array_append (builder->variable_buffer, (const guint8 *)utf16le, (guint)utf16le_bytes);
-        while (utf16le_bytes % 4 != 0) {
-            const guint8 padding = 0;
+    if (utf16_bytes) {
+        /* For BE systems, convert from BE to LE */
+        if (G_BYTE_ORDER == G_BIG_ENDIAN) {
+            guint i;
 
-            g_byte_array_append (builder->variable_buffer, &padding, 1);
-            utf16le_bytes++;
+            for (i = 0; i < (utf16_bytes / 2); i++)
+                utf16[i] = GUINT16_TO_LE (utf16[i]);
         }
+        g_byte_array_append (builder->variable_buffer, (const guint8 *)utf16, (guint)utf16_bytes);
+        bytearray_apply_padding (builder->variable_buffer, &utf16_bytes);
     }
-    g_free (utf16le);
+    g_free (utf16);
 }
 
 void
@@ -824,10 +851,11 @@ void
 _mbim_message_command_builder_append_byte_array (MbimMessageCommandBuilder *builder,
                                                  gboolean                   with_offset,
                                                  gboolean                   with_length,
+                                                 gboolean                   pad_buffer,
                                                  const guint8              *buffer,
                                                  guint32                    buffer_len)
 {
-    _mbim_struct_builder_append_byte_array (builder->contents_builder, with_offset, with_length, buffer, buffer_len);
+    _mbim_struct_builder_append_byte_array (builder->contents_builder, with_offset, with_length, pad_buffer, buffer, buffer_len);
 }
 
 void
