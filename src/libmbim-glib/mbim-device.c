@@ -39,10 +39,11 @@
 #define IOCTL_WDM_MAX_COMMAND _IOR('H', 0xA0, guint16)
 #define RETRY_TIMEOUT_SECS 5
 
-#if WITH_UDEV
+#if defined WITH_UDEV
 # include <gudev/gudev.h>
 #endif
 
+#include "mbim-common.h"
 #include "mbim-utils.h"
 #include "mbim-device.h"
 #include "mbim-message.h"
@@ -495,9 +496,9 @@ process_message (MbimDevice  *self,
     if (mbim_utils_get_traces_enabled ()) {
         gchar *printable;
 
-        printable = __mbim_utils_str_hex (((GByteArray *)message)->data,
-                                          ((GByteArray *)message)->len,
-                                          ':');
+        printable = mbim_common_str_hex (((GByteArray *)message)->data,
+                                         ((GByteArray *)message)->len,
+                                         ':');
         g_debug ("[%s] Received message...%s\n"
                  ">>>>>> RAW:\n"
                  ">>>>>>   length = %u\n"
@@ -778,7 +779,7 @@ struct usb_cdc_mbim_desc {
     guint8  bmNetworkCapabilities;
 } __attribute__ ((packed));
 
-#if WITH_UDEV
+#if defined WITH_UDEV
 
 static gchar *
 get_descriptors_filepath (MbimDevice *self)
@@ -911,7 +912,7 @@ read_max_control_transfer (MbimDevice *self)
 {
     static const guint8 mbim_signature[4] = { 0x0c, 0x24, 0x1b, 0x00 };
     guint16 max = MAX_CONTROL_TRANSFER;
-    gchar *descriptors_path;
+    gchar *descriptors_path = NULL;
     GError *error = NULL;
     gchar *contents = NULL;
     gsize length = 0;
@@ -958,6 +959,7 @@ read_max_control_transfer (MbimDevice *self)
 
 out:
     g_free (contents);
+    g_free (descriptors_path);
 
     return max;
 }
@@ -1811,7 +1813,7 @@ device_send (MbimDevice   *self,
     if (mbim_utils_get_traces_enabled ()) {
         gchar *printable;
 
-        printable = __mbim_utils_str_hex (raw_message, raw_message_len, ':');
+        printable = mbim_common_str_hex (raw_message, raw_message_len, ':');
         g_debug ("[%s] Sent message...\n"
                  "<<<<<< RAW:\n"
                  "<<<<<<   length = %u\n"
@@ -1846,9 +1848,9 @@ device_send (MbimDevice   *self,
             gchar *printable_fh;
             gchar *printable_d;
 
-            printable_h  = __mbim_utils_str_hex (&fragments[i].header, sizeof (fragments[i].header), ':');
-            printable_fh = __mbim_utils_str_hex (&fragments[i].fragment_header, sizeof (fragments[i].fragment_header), ':');
-            printable_d  = __mbim_utils_str_hex (fragments[i].data, fragments[i].data_length, ':');
+            printable_h  = mbim_common_str_hex (&fragments[i].header, sizeof (fragments[i].header), ':');
+            printable_fh = mbim_common_str_hex (&fragments[i].fragment_header, sizeof (fragments[i].fragment_header), ':');
+            printable_d  = mbim_common_str_hex (fragments[i].data, fragments[i].data_length, ':');
             g_debug ("[%s] Sent fragment (%u)...\n"
                      "<<<<<< RAW:\n"
                      "<<<<<<   length = %u\n"

@@ -31,6 +31,7 @@
 
 #include <libmbim-glib.h>
 
+#include "mbim-common.h"
 #include "mbimcli.h"
 #include "mbimcli-helpers.h"
 
@@ -67,6 +68,7 @@ static gchar    *set_connect_activate_str;
 static gchar    *query_ip_configuration_str;
 static gchar    *set_connect_deactivate_str;
 static gboolean  query_packet_statistics_flag;
+static gchar    *query_ip_packet_filters_str;
 
 static gboolean query_connection_state_arg_parse (const char *option_name,
                                                   const char *value,
@@ -82,6 +84,11 @@ static gboolean disconnect_arg_parse (const char *option_name,
                                       const char *value,
                                       gpointer user_data,
                                       GError **error);
+
+static gboolean query_ip_packet_filters_arg_parse (const char *option_name,
+                                                   const char *value,
+                                                   gpointer user_data,
+                                                   GError **error);
 
 static GOptionEntry entries[] = {
     { "query-device-caps", 0, 0, G_OPTION_ARG_NONE, &query_device_caps_flag,
@@ -184,6 +191,10 @@ static GOptionEntry entries[] = {
       "Query packet statistics",
       NULL
     },
+    { "query-ip-packet-filters", 0, G_OPTION_FLAG_OPTIONAL_ARG, G_OPTION_ARG_CALLBACK, G_CALLBACK (query_ip_packet_filters_arg_parse),
+      "Query IP packet filters (SessionID is optional, defaults to 0)",
+      "[SessionID]"
+    },
     { NULL }
 };
 
@@ -232,6 +243,16 @@ disconnect_arg_parse (const char *option_name,
     return TRUE;
 }
 
+static gboolean
+query_ip_packet_filters_arg_parse (const char *option_name,
+                                   const char *value,
+                                   gpointer user_data,
+                                   GError **error)
+{
+    query_ip_packet_filters_str = g_strdup (value ? value : "0");
+    return TRUE;
+}
+
 gboolean
 mbimcli_basic_connect_options_enabled (void)
 {
@@ -265,7 +286,8 @@ mbimcli_basic_connect_options_enabled (void)
                  !!set_connect_activate_str +
                  !!query_ip_configuration_str +
                  !!set_connect_deactivate_str +
-                 query_packet_statistics_flag);
+                 query_packet_statistics_flag +
+                 !!query_ip_packet_filters_str);
 
     if (n_actions > 1) {
         g_printerr ("error: too many Basic Connect actions requested\n");
@@ -350,6 +372,7 @@ query_device_caps_ready (MbimDevice   *device,
             &error)) {
         g_printerr ("error: couldn't parse response message: %s\n", error->message);
         g_error_free (error);
+        mbim_message_unref (response);
         shutdown (FALSE);
         return;
     }
@@ -440,6 +463,7 @@ query_subscriber_ready_status_ready (MbimDevice   *device,
             &error)) {
         g_printerr ("error: couldn't parse response message: %s\n", error->message);
         g_error_free (error);
+        mbim_message_unref (response);
         shutdown (FALSE);
         return;
     }
@@ -499,6 +523,7 @@ query_radio_state_ready (MbimDevice   *device,
             &error)) {
         g_printerr ("error: couldn't parse response message: %s\n", error->message);
         g_error_free (error);
+        mbim_message_unref (response);
         shutdown (FALSE);
         return;
     }
@@ -545,6 +570,7 @@ query_device_services_ready (MbimDevice   *device,
             &error)) {
         g_printerr ("error: couldn't parse response message: %s\n", error->message);
         g_error_free (error);
+        mbim_message_unref (response);
         shutdown (FALSE);
         return;
     }
@@ -637,6 +663,7 @@ pin_ready (MbimDevice   *device,
             &error)) {
         g_printerr ("error: couldn't parse response message: %s\n", error->message);
         g_error_free (error);
+        mbim_message_unref (response);
         shutdown (FALSE);
         return;
     }
@@ -736,7 +763,8 @@ ip_configuration_query_ready (MbimDevice *device,
 
 static void
 ip_configuration_query (MbimDevice *device,
-                        guint session_id)
+                        GCancellable *cancellable,
+                        guint32 session_id)
 {
     MbimMessage *message;
     GError *error = NULL;
@@ -761,7 +789,6 @@ ip_configuration_query (MbimDevice *device,
     if (!message) {
         g_printerr ("error: couldn't create IP config request: %s\n", error->message);
         g_error_free (error);
-        mbim_message_unref (message);
         shutdown (FALSE);
         return;
     }
@@ -769,7 +796,7 @@ ip_configuration_query (MbimDevice *device,
     mbim_device_command (device,
                          message,
                          60,
-                         NULL,
+                         cancellable,
                          (GAsyncReadyCallback)ip_configuration_query_ready,
                          NULL);
     mbim_message_unref (message);
@@ -810,6 +837,7 @@ connect_ready (MbimDevice   *device,
             &error)) {
         g_printerr ("error: couldn't parse response message: %s\n", error->message);
         g_error_free (error);
+        mbim_message_unref (response);
         shutdown (FALSE);
         return;
     }
@@ -844,10 +872,67 @@ connect_ready (MbimDevice   *device,
              VALIDATE_UNKNOWN (mbim_nw_error_get_string (nw_error)));
 
     if (GPOINTER_TO_UINT (user_data) == CONNECT) {
-        ip_configuration_query (device, session_id);
+        ip_configuration_query (device, NULL, session_id);
         return;
     }
 
+    shutdown (TRUE);
+}
+
+static void
+ip_packet_filters_ready (MbimDevice *device,
+                         GAsyncResult *res,
+                         gpointer unused)
+{
+    MbimMessage *response;
+    GError *error = NULL;
+    MbimPacketFilter **filters;
+    guint32 filters_count, i;
+
+    response = mbim_device_command_finish (device, res, &error);
+    if (!response ||
+        !mbim_message_response_get_result (response, MBIM_MESSAGE_TYPE_COMMAND_DONE, &error)) {
+        g_printerr ("error: operation failed: %s\n", error->message);
+        g_error_free (error);
+        if (response)
+            mbim_message_unref (response);
+        shutdown (FALSE);
+        return;
+    }
+
+    if (!mbim_message_ip_packet_filters_response_parse (
+            response,
+            NULL, /* sessionid */
+            &filters_count,
+            &filters,
+            &error)) {
+        g_printerr ("error: couldn't parse response message: %s\n", error->message);
+        g_error_free (error);
+        mbim_message_unref (response);
+        shutdown (FALSE);
+        return;
+    }
+
+    g_print ("\n[%s] IP packet filters: (%u)\n", mbim_device_get_path_display (device), filters_count);
+
+    for (i = 0; i < filters_count; i++) {
+        gchar *bytes;
+
+        g_print ("\n");
+        g_print ("\tFilter size: %u\n", filters[i]->filter_size);
+
+        bytes = mbim_common_str_hex (filters[i]->packet_filter, filters[i]->filter_size, ' ');
+        g_print ("\tPacket filter: %s\n", VALIDATE_UNKNOWN (bytes));
+        g_free (bytes);
+
+        bytes = mbim_common_str_hex (filters[i]->packet_mask, filters[i]->filter_size, ' ');
+        g_print ("\tPacket mask: %s\n", VALIDATE_UNKNOWN (bytes));
+        g_free (bytes);
+    }
+
+    mbim_packet_filter_array_free (filters);
+
+    mbim_message_unref (response);
     shutdown (TRUE);
 }
 
@@ -872,7 +957,7 @@ mbim_auth_protocol_from_string (const gchar      *str,
 static gboolean
 connect_session_id_parse (const gchar  *str,
                           gboolean      allow_empty,
-                          guint        *session_id,
+                          guint32      *session_id,
                           GError      **error)
 {
     gchar *endptr = NULL;
@@ -903,13 +988,13 @@ connect_session_id_parse (const gchar  *str,
                      str);
         return FALSE;
     }
-    *session_id = (guint) n;
+    *session_id = (guint32) n;
 
     return TRUE;
 }
 
 typedef struct {
-    guint             session_id;
+    guint32           session_id;
     gchar            *apn;
     MbimAuthProtocol  auth_protocol;
     gchar            *username;
@@ -965,7 +1050,7 @@ static gboolean connect_activate_properties_handle (const gchar  *key,
 
 static gboolean
 set_connect_activate_parse (const gchar       *str,
-                            guint             *session_id,
+                            guint32           *session_id,
                             gchar            **apn,
                             MbimAuthProtocol  *auth_protocol,
                             gchar            **username,
@@ -1087,6 +1172,7 @@ home_provider_ready (MbimDevice   *device,
                                                     &error)) {
         g_printerr ("error: couldn't parse response message: %s\n", error->message);
         g_error_free (error);
+        mbim_message_unref (response);
         shutdown (FALSE);
         return;
     }
@@ -1144,6 +1230,7 @@ preferred_providers_ready (MbimDevice   *device,
                                                           &error)) {
         g_printerr ("error: couldn't parse response message: %s\n", error->message);
         g_error_free (error);
+        mbim_message_unref (response);
         shutdown (FALSE);
         return;
     }
@@ -1214,6 +1301,7 @@ visible_providers_ready (MbimDevice   *device,
                                                         &error)) {
         g_printerr ("error: couldn't parse response message: %s\n", error->message);
         g_error_free (error);
+        mbim_message_unref (response);
         shutdown (FALSE);
         return;
     }
@@ -1300,6 +1388,7 @@ register_state_ready (MbimDevice   *device,
                                                      &error)) {
         g_printerr ("error: couldn't parse response message: %s\n", error->message);
         g_error_free (error);
+        mbim_message_unref (response);
         shutdown (FALSE);
         return;
     }
@@ -1376,6 +1465,7 @@ signal_state_ready (MbimDevice   *device,
                                                    &error)) {
         g_printerr ("error: couldn't parse response message: %s\n", error->message);
         g_error_free (error);
+        mbim_message_unref (response);
         shutdown (FALSE);
         return;
     }
@@ -1439,6 +1529,7 @@ packet_service_ready (MbimDevice   *device,
                                                      &error)) {
         g_printerr ("error: couldn't parse response message: %s\n", error->message);
         g_error_free (error);
+        mbim_message_unref (response);
         shutdown (FALSE);
         return;
     }
@@ -1514,6 +1605,7 @@ packet_statistics_ready (MbimDevice   *device,
                                                         &error)) {
         g_printerr ("error: couldn't parse response message: %s\n", error->message);
         g_error_free (error);
+        mbim_message_unref (response);
         shutdown (FALSE);
         return;
     }
@@ -1548,8 +1640,7 @@ mbimcli_basic_connect_run (MbimDevice   *device,
     /* Initialize context */
     ctx = g_slice_new (Context);
     ctx->device = g_object_ref (device);
-    if (cancellable)
-        ctx->cancellable = g_object_ref (cancellable);
+    ctx->cancellable = cancellable ? g_object_ref (cancellable) : NULL;
 
     /* Request to get capabilities? */
     if (query_device_caps_flag) {
@@ -1890,7 +1981,7 @@ mbimcli_basic_connect_run (MbimDevice   *device,
     if (query_connect_str) {
         MbimMessage *request;
         GError *error = NULL;
-        guint session_id = 0;
+        guint32 session_id = 0;
 
         if (!connect_session_id_parse (query_connect_str, TRUE, &session_id, &error)) {
             g_printerr ("error: couldn't parse session ID: %s\n", error->message);
@@ -1927,7 +2018,7 @@ mbimcli_basic_connect_run (MbimDevice   *device,
     if (set_connect_activate_str) {
         MbimMessage *request;
         GError *error = NULL;
-        guint session_id = 0;
+        guint32 session_id = 0;
         gchar *apn;
         MbimAuthProtocol auth_protocol;
         gchar *username = NULL;
@@ -1977,7 +2068,7 @@ mbimcli_basic_connect_run (MbimDevice   *device,
     /* Query IP configuration? */
     if (query_ip_configuration_str) {
         GError *error = NULL;
-        guint session_id = 0;
+        guint32 session_id = 0;
 
         if (!connect_session_id_parse (query_ip_configuration_str, TRUE, &session_id, &error)) {
             g_printerr ("error: couldn't parse session ID: %s\n", error->message);
@@ -1986,7 +2077,7 @@ mbimcli_basic_connect_run (MbimDevice   *device,
             return;
         }
 
-        ip_configuration_query (ctx->device, session_id);
+        ip_configuration_query (ctx->device, ctx->cancellable, session_id);
         return;
     }
 
@@ -1994,7 +2085,7 @@ mbimcli_basic_connect_run (MbimDevice   *device,
     if (set_connect_deactivate_str) {
         MbimMessage *request;
         GError *error = NULL;
-        guint session_id = 0;
+        guint32 session_id = 0;
 
         if (!connect_session_id_parse (set_connect_deactivate_str, TRUE, &session_id, &error)) {
             g_printerr ("error: couldn't parse session ID: %s\n", error->message);
@@ -2040,6 +2131,41 @@ mbimcli_basic_connect_run (MbimDevice   *device,
                              10,
                              ctx->cancellable,
                              (GAsyncReadyCallback)packet_statistics_ready,
+                             NULL);
+        mbim_message_unref (request);
+        return;
+    }
+
+    /* Query IP packet filters? */
+    if (query_ip_packet_filters_str) {
+        MbimMessage *request;
+        GError *error = NULL;
+        guint32 session_id = 0;
+
+        if (!connect_session_id_parse (query_ip_packet_filters_str, TRUE, &session_id, &error)) {
+            g_printerr ("error: couldn't parse session ID: %s\n", error->message);
+            g_error_free (error);
+            shutdown (FALSE);
+            return;
+        }
+
+        request = (mbim_message_ip_packet_filters_query_new (
+                       session_id,
+                       0, /* packet_filters_count */
+                       NULL, /* packet_filters */
+                       &error));
+        if (!request) {
+            g_printerr ("error: couldn't create IP packet filters request: %s\n", error->message);
+            g_error_free (error);
+            shutdown (FALSE);
+            return;
+        }
+
+        mbim_device_command (ctx->device,
+                             request,
+                             10,
+                             ctx->cancellable,
+                             (GAsyncReadyCallback)ip_packet_filters_ready,
                              NULL);
         mbim_message_unref (request);
         return;
