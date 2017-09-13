@@ -37,7 +37,9 @@
 #include <gio/gunixsocketaddress.h>
 #include <sys/ioctl.h>
 #define IOCTL_WDM_MAX_COMMAND _IOR('H', 0xA0, guint16)
-#define RETRY_TIMEOUT_SECS 5
+
+#define OPEN_RETRY_TIMEOUT_SECS 5
+#define OPEN_CLOSE_TIMEOUT_SECS 2
 
 #if defined WITH_UDEV
 # include <gudev/gudev.h>
@@ -111,6 +113,7 @@ struct _MbimDevicePrivate {
     GSource *iochannel_source;
     GByteArray *response;
     OpenStatus open_status;
+    guint32 open_transaction_id;
 
     /* Support for mbim-proxy */
     GSocketClient *socket_client;
@@ -485,6 +488,33 @@ indication_ready (MbimDevice   *self,
 }
 
 static void
+finalize_pending_open_request (MbimDevice *self)
+{
+    Transaction *tr;
+    GError      *error = NULL;
+
+    if (!self->priv->open_transaction_id)
+        return;
+
+    /* Grab transaction. This is a _DONE message, so look for the request
+     * that generated the _DONE */
+    tr = device_release_transaction (self,
+                                     TRANSACTION_TYPE_HOST,
+                                     MBIM_MESSAGE_TYPE_OPEN,
+                                     self->priv->open_transaction_id);
+
+    /* If there is a valid open_transaction_id, there must be a valid transaction */
+    g_assert (tr);
+
+    /* Clear right away before completing the transaction */
+    self->priv->open_transaction_id = 0;
+
+    error = g_error_new (MBIM_CORE_ERROR, MBIM_CORE_ERROR_UNKNOWN_STATE, "device state is unknown");
+    transaction_complete_and_free (tr, error);
+    g_error_free (error);
+}
+
+static void
 process_message (MbimDevice  *self,
                  const MbimMessage *message)
 {
@@ -561,6 +591,14 @@ process_message (MbimDevice  *self,
                              printable);
                     g_free (printable);
                 }
+
+                /* If we're opening and we get a CLOSE_DONE message without any
+                 * matched transaction, finalize the open request right away to
+                 * trigger a close before open */
+                if (self->priv->open_status == OPEN_STATUS_OPENING &&
+                    MBIM_MESSAGE_GET_MESSAGE_TYPE (message) == MBIM_MESSAGE_TYPE_CLOSE_DONE)
+                    finalize_pending_open_request (self);
+
                 return;
             }
 
@@ -876,7 +914,7 @@ get_descriptors_filepath (MbimDevice *self)
          *    /sys/devices/pci0000:00/0000:00:1d.0/usb2/2-1/2-1.5/2-1.5:2.0
          */
         tmp = g_strdup_printf ("/sys/class/%s/%s/device", subsystems[i], device_basename);
-        path = canonicalize_file_name (tmp);
+        path = realpath (tmp, NULL);
         g_free (tmp);
 
         if (g_file_test (path, G_FILE_TEST_EXISTS)) {
@@ -1209,19 +1247,23 @@ typedef enum {
     DEVICE_OPEN_CONTEXT_STEP_FIRST = 0,
     DEVICE_OPEN_CONTEXT_STEP_CREATE_IOCHANNEL,
     DEVICE_OPEN_CONTEXT_STEP_FLAGS_PROXY,
+    DEVICE_OPEN_CONTEXT_STEP_CLOSE_MESSAGE,
     DEVICE_OPEN_CONTEXT_STEP_OPEN_MESSAGE,
     DEVICE_OPEN_CONTEXT_STEP_LAST
 } DeviceOpenContextStep;
 
 typedef struct {
-    DeviceOpenContextStep step;
-    MbimDeviceOpenFlags flags;
-    gint timeout;
+    DeviceOpenContextStep  step;
+    MbimDeviceOpenFlags    flags;
+    guint                  timeout;
+    GTimer                *timer;
+    gboolean               close_before_open;
 } DeviceOpenContext;
 
 static void
 device_open_context_free (DeviceOpenContext *ctx)
 {
+    g_timer_destroy (ctx->timer);
     g_slice_free (DeviceOpenContext, ctx);
 }
 
@@ -1276,22 +1318,27 @@ open_message_ready (MbimDevice   *self,
 
     ctx = g_task_get_task_data (task);
 
+    /* Cleanup, as no longer needed */
+    self->priv->open_transaction_id = 0;
+
     response = mbim_device_command_finish (self, res, &error);
     if (!response) {
-        /* Check if we should be retrying */
-        if (g_error_matches (error, MBIM_CORE_ERROR, MBIM_CORE_ERROR_TIMEOUT)) {
-            /* The timeout will tell us how many retries we should do */
-            ctx->timeout -= RETRY_TIMEOUT_SECS;
-            if (ctx->timeout > 0) {
-                g_error_free (error);
-                open_message (task);
-                return;
-            }
-
-            /* No more seconds left in the timeout... return error */
+        /* If we get reported that the state is unknown, try to close before open */
+        if (g_error_matches (error, MBIM_CORE_ERROR, MBIM_CORE_ERROR_UNKNOWN_STATE)) {
+            ctx->close_before_open = TRUE;
+            ctx->step = DEVICE_OPEN_CONTEXT_STEP_CLOSE_MESSAGE;
+            device_open_context_step (task);
+            return;
         }
 
-        g_debug ("open operation timed out: closed");
+        /* Check if we should be retrying after a timeout */
+        if (g_error_matches (error, MBIM_CORE_ERROR, MBIM_CORE_ERROR_TIMEOUT)) {
+            /* Retry same step */
+            device_open_context_step (task);
+            return;
+        }
+
+        g_debug ("error reported in open operation: closed");
         self->priv->open_status = OPEN_STATUS_CLOSED;
         g_task_return_error (task, error);
         g_object_unref (task);
@@ -1323,13 +1370,59 @@ open_message (GTask *task)
     self = g_task_get_source_object (task);
 
     /* Launch 'Open' command */
-    request = mbim_message_open_new (mbim_device_get_next_transaction_id (self),
+    self->priv->open_transaction_id = mbim_device_get_next_transaction_id (self);
+    request = mbim_message_open_new (self->priv->open_transaction_id,
                                      self->priv->max_control_transfer);
     mbim_device_command (self,
                          request,
-                         RETRY_TIMEOUT_SECS,
+                         OPEN_RETRY_TIMEOUT_SECS,
                          g_task_get_cancellable (task),
                          (GAsyncReadyCallback)open_message_ready,
+                         task);
+    mbim_message_unref (request);
+}
+
+static void
+close_message_before_open_ready (MbimDevice   *self,
+                                 GAsyncResult *res,
+                                 GTask        *task)
+{
+    DeviceOpenContext *ctx;
+    MbimMessage *response;
+    GError *error = NULL;
+
+    ctx = g_task_get_task_data (task);
+
+    response = mbim_device_command_finish (self, res, &error);
+    if (!response)
+        g_debug ("error reported in close before open: %s (ignored)", error->message);
+    else if (!mbim_message_response_get_result (response, MBIM_MESSAGE_TYPE_CLOSE_DONE, &error))
+        g_debug ("getting close done result failed: %s (ignored)", error->message);
+
+    g_clear_error (&error);
+    if (response)
+        mbim_message_unref (response);
+
+    /* go on */
+    ctx->step++;
+    device_open_context_step (task);
+}
+
+static void
+close_message_before_open (GTask *task)
+{
+    MbimDevice *self;
+    MbimMessage *request;
+
+    self = g_task_get_source_object (task);
+
+    /* Launch 'Close' command */
+    request = mbim_message_close_new (mbim_device_get_next_transaction_id (self));
+    mbim_device_command (self,
+                         request,
+                         OPEN_CLOSE_TIMEOUT_SECS,
+                         g_task_get_cancellable (task),
+                         (GAsyncReadyCallback)close_message_before_open_ready,
                          task);
     mbim_message_unref (request);
 }
@@ -1416,6 +1509,18 @@ device_open_context_step (GTask *task)
     self = g_task_get_source_object (task);
     ctx = g_task_get_task_data (task);
 
+    /* Timed out? */
+    if (g_timer_elapsed (ctx->timer, NULL) > ctx->timeout) {
+        g_debug ("open operation timed out: closed");
+        self->priv->open_status = OPEN_STATUS_CLOSED;
+        g_task_return_new_error (task,
+                                 MBIM_CORE_ERROR,
+                                 MBIM_CORE_ERROR_TIMEOUT,
+                                 "Operation timed out: device is closed");
+        g_object_unref (task);
+        return;
+    }
+
     switch (ctx->step) {
     case DEVICE_OPEN_CONTEXT_STEP_FIRST:
         if (self->priv->open_status == OPEN_STATUS_OPEN) {
@@ -1453,6 +1558,16 @@ device_open_context_step (GTask *task)
     case DEVICE_OPEN_CONTEXT_STEP_FLAGS_PROXY:
         if (ctx->flags & MBIM_DEVICE_OPEN_FLAGS_PROXY) {
             proxy_cfg_message (task);
+            return;
+        }
+        ctx->step++;
+        /* Fall down */
+
+    case DEVICE_OPEN_CONTEXT_STEP_CLOSE_MESSAGE:
+        /* Only send an explicit close during open if needed */
+        if (ctx->close_before_open) {
+            ctx->close_before_open = FALSE;
+            close_message_before_open (task);
             return;
         }
         ctx->step++;
@@ -1512,10 +1627,12 @@ mbim_device_open_full (MbimDevice          *self,
     g_return_if_fail (MBIM_IS_DEVICE (self));
     g_return_if_fail (timeout > 0);
 
-    ctx = g_slice_new (DeviceOpenContext);
+    ctx = g_slice_new0 (DeviceOpenContext);
     ctx->step = DEVICE_OPEN_CONTEXT_STEP_FIRST;
     ctx->flags = flags;
     ctx->timeout = timeout;
+    ctx->timer = g_timer_new ();
+    ctx->close_before_open = FALSE;
 
     task = g_task_new (self, cancellable, callback, user_data);
     g_task_set_task_data (task, ctx, (GDestroyNotify)device_open_context_free);
