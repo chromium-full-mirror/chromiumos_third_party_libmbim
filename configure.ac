@@ -4,7 +4,7 @@ AC_PREREQ([2.68])
 dnl The libmbim version number
 m4_define([mbim_major_version], [1])
 m4_define([mbim_minor_version], [17])
-m4_define([mbim_micro_version], [0])
+m4_define([mbim_micro_version], [1])
 m4_define([mbim_version],
           [mbim_major_version.mbim_minor_version.mbim_micro_version])
 
@@ -97,6 +97,8 @@ PKG_CHECK_MODULES(MBIMPROXY,
                   gio-2.0)
 AC_SUBST(MBIMPROXY_CFLAGS)
 AC_SUBST(MBIMPROXY_LIBS)
+
+AM_PATH_PYTHON([], [], [PYTHON=python])
 
 GLIB_MKENUMS=`$PKG_CONFIG --variable=glib_mkenums glib-2.0`
 AC_SUBST(GLIB_MKENUMS)
