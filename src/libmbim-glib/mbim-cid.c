@@ -144,7 +144,7 @@ static const CidConfig cid_proxy_control_config [MBIM_CID_PROXY_CONTROL_LAST] = 
 /* Note: index of the array is CID-1 */
 #define MBIM_CID_QMI_LAST MBIM_CID_QMI_MSG
 static const CidConfig cid_qmi_config [MBIM_CID_QMI_LAST] = {
-    { SET, NO_QUERY, NO_NOTIFY }, /* MBIM_CID_QMI_MSG */
+    { SET, NO_QUERY, NOTIFY }, /* MBIM_CID_QMI_MSG */
 };
 
 /* Note: index of the array is CID-1 */
@@ -366,6 +366,8 @@ mbim_cid_get_printable (MbimService service,
         return mbim_cid_qmi_get_string (cid);
     case MBIM_SERVICE_ATDS:
         return mbim_cid_atds_get_string (cid);
+    case MBIM_SERVICE_INTEL_FIRMWARE_UPDATE:
+        return mbim_cid_intel_firmware_update_get_string (cid);
     default:
         g_assert_not_reached ();
         return NULL;
