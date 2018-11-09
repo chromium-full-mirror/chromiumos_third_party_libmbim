@@ -1,0 +1,33 @@
+[
+  // *********************************************************************************
+  { "type" : "Service",
+    "name" : "Ms Basic Connect Extensions" },
+
+  // *********************************************************************************
+  { "name"     : "MbimPcoValue",
+    "type"     : "Struct",
+    "contents" : [ { "name"             : "SessionId",
+                     "format"           : "guint32" },
+                   { "name"             : "PcoDataSize",
+                     "format"           : "guint32" },
+                   { "name"             : "PcoDataType",
+                     "format"           : "guint32",
+                     "public-format"    : "MbimPcoType" },
+                   { "name"             : "PcoDataBuffer",
+                     "format"           : "ref-byte-array-no-offset",
+                     "array-size-field" : "PcoDataSize" } ] },
+
+  { "name"         : "PCO",
+    "service"      : "Ms Basic Connect Extensions",
+    "type"         : "Command",
+    "query"        : [ { "name"        : "PcoValue",
+                         "format"      : "struct",
+                         "struct-type" : "MbimPcoValue" } ],
+    "response"     : [ { "name"        : "PcoValue",
+                         "format"      : "struct",
+                         "struct-type" : "MbimPcoValue" } ],
+    "notification" : [ { "name"        : "PcoValue",
+                         "format"      : "struct",
+                         "struct-type" : "MbimPcoValue" } ] }
+
+]

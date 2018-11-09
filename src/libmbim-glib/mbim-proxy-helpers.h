@@ -43,7 +43,6 @@ gboolean         _mbim_proxy_helper_service_subscribe_list_cmp          (const M
                                                                          gsize                         b_size);
 void             _mbim_proxy_helper_service_subscribe_list_debug        (const MbimEventEntry * const *list,
                                                                          gsize                         list_size);
-MbimEventEntry **_mbim_proxy_helper_service_subscribe_standard_list_new (gsize           *out_size);
 MbimEventEntry **_mbim_proxy_helper_service_subscribe_request_parse     (MbimMessage     *message,
                                                                          gsize           *out_size);
 MbimEventEntry **_mbim_proxy_helper_service_subscribe_list_merge        (MbimEventEntry **original,
@@ -51,6 +50,10 @@ MbimEventEntry **_mbim_proxy_helper_service_subscribe_list_merge        (MbimEve
                                                                          MbimEventEntry **merge,
                                                                          gsize            merge_size,
                                                                          gsize           *out_size);
+MbimEventEntry **_mbim_proxy_helper_service_subscribe_list_dup          (MbimEventEntry **original,
+                                                                         gsize            original_size,
+                                                                         gsize           *out_size);
+MbimEventEntry **_mbim_proxy_helper_service_subscribe_list_new_standard (gsize           *out_size);
 
 G_END_DECLS
 
