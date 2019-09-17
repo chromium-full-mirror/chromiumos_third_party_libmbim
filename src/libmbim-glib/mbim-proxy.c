@@ -295,6 +295,12 @@ client_indication_cb (MbimDevice *device,
     if (!entry)
         return;
 
+    /* if client subscribed using the wildcard, no need to match specific cid */
+    if (entry->cids_count == 0) {
+        forward_indication (client, message);
+        return;
+    }
+
     /* Look for the specific cid in the event list */
     for (i = 0; i < entry->cids_count; i++) {
         if (mbim_message_indicate_status_get_cid (message) == entry->cids[i]) {
@@ -1260,8 +1266,8 @@ merge_client_service_subscribe_lists (MbimProxy  *self,
 
     g_assert (out_size != NULL);
 
-    /* Add previous global list */
-    updated = _mbim_proxy_helper_service_subscribe_list_dup (ctx->mbim_event_entry_array, ctx->mbim_event_entry_array_size, &updated_size);
+    /* Init default list */
+    updated = _mbim_proxy_helper_service_subscribe_list_new_standard (&updated_size);
 
     /* Lookup all clients with this device */
     for (l = self->priv->clients; l; l = g_list_next (l)) {
