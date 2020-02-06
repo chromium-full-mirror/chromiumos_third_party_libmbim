@@ -1104,7 +1104,7 @@ connect_session_id_parse (const gchar  *str,
 
     errno = 0;
     n = g_ascii_strtoll (str, &endptr, 10);
-    if (errno || n < 0 || n > 255 || ((endptr - str) < strlen (str))) {
+    if (errno || n < 0 || n > 255 || ((size_t)(endptr - str) < strlen (str))) {
         g_set_error (error,
                      MBIM_CORE_ERROR,
                      MBIM_CORE_ERROR_FAILED,
@@ -1778,7 +1778,7 @@ provisioned_contexts_ready (MbimDevice   *device,
     MbimMessage *response;
     MbimProvisionedContextElement **provisioned_contexts;
     guint32 provisioned_contexts_count;
-    int i;
+    guint i;
     GError *error = NULL;
 
     response = mbim_device_command_finish (device, res, &error);

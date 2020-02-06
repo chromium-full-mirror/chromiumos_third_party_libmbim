@@ -115,9 +115,15 @@ log_handler (const gchar *log_domain,
         log_level_str = "[Debug]";
         break;
 
-    default:
+    case G_LOG_LEVEL_MESSAGE:
+    case G_LOG_LEVEL_INFO:
         log_level_str = "";
         break;
+
+    case G_LOG_LEVEL_MASK:
+    case G_LOG_FLAG_RECURSION:
+    default:
+        g_assert_not_reached ();
     }
 
     if (!verbose_flag && !err)
@@ -130,12 +136,13 @@ log_handler (const gchar *log_domain,
                message);
 }
 
+G_GNUC_NORETURN
 static void
 print_version_and_exit (void)
 {
     g_print ("\n"
              PROGRAM_NAME " " PROGRAM_VERSION "\n"
-             "Copyright (C) 2013-2019 Aleksander Morgado\n"
+             "Copyright (C) 2013-2020 Aleksander Morgado\n"
              "Copyright (C) 2014-2018 Greg Suarez\n"
              "License GPLv2+: GNU GPL version 2 or later <http://gnu.org/licenses/gpl-2.0.html>\n"
              "This is free software: you are free to change and redistribute it.\n"

@@ -173,7 +173,8 @@ class Struct:
         if self.single_member == True:
             template = (
                 '\n'
-                'void ${name_underscore}_free (${name} *var);\n')
+                'void ${name_underscore}_free (${name} *var);\n'
+                'G_DEFINE_AUTOPTR_CLEANUP_FUNC (${name}, ${name_underscore}_free)\n')
             hfile.write(string.Template(template).substitute(translations))
 
 
@@ -243,7 +244,14 @@ class Struct:
         if self.array_member:
             template = (
                 '\n'
-                'void ${name_underscore}_array_free (${name} **array);\n')
+                '/**\n'
+                ' * ${name}Array:\n'
+                ' *\n'
+                ' * A NULL-terminated array of ${name} elements.\n'
+                ' */\n'
+                'typedef ${name} *${name}Array;\n'
+                'void ${name_underscore}_array_free (${name}Array *array);\n'
+                'G_DEFINE_AUTOPTR_CLEANUP_FUNC (${name}Array, ${name_underscore}_array_free)\n')
             hfile.write(string.Template(template).substitute(translations))
 
             template = (
@@ -255,7 +263,7 @@ class Struct:
                 ' * Frees the memory allocated for the array of #${name}s.\n'
                 ' */\n'
                 'void\n'
-                '${name_underscore}_array_free (${name} **array)\n'
+                '${name_underscore}_array_free (${name}Array *array)\n'
                 '{\n'
                 '    guint32 i;\n'
                 '\n'
@@ -411,14 +419,16 @@ class Struct:
             '_mbim_message_read_${name_underscore}_struct (\n'
             '    const MbimMessage *self,\n'
             '    guint32 relative_offset,\n'
-            '    guint32 *bytes_read)\n'
+            '    guint32 *bytes_read,\n'
+            '    GError **error)\n'
             '{\n'
+            '    gboolean success = FALSE;\n'
             '    ${name} *out;\n'
             '    guint32 offset = relative_offset;\n'
             '\n'
             '    g_assert (self != NULL);\n'
             '\n'
-            '    out = g_new (${name}, 1);\n')
+            '    out = g_new0 (${name}, 1);\n')
 
         for field in self.contents:
             translations['field_name_underscore'] = utils.build_underscore_name_from_camelcase(field['name'])
@@ -427,8 +437,14 @@ class Struct:
             if field['format'] == 'uuid':
                 inner_template += (
                     '\n'
-                    '    memcpy (&(out->${field_name_underscore}), _mbim_message_read_uuid (self, offset), 16);\n'
-                    '    offset += 16;\n')
+                    '    {\n'
+                    '        const MbimUuid *tmp;\n'
+                    '\n'
+                    '        if (!_mbim_message_read_uuid (self, offset, &tmp, error))\n'
+                    '            goto out;\n'
+                    '        memcpy (&(out->${field_name_underscore}), tmp, 16);\n'
+                    '        offset += 16;\n'
+                    '    }\n')
             elif field['format'] in ['ref-byte-array', 'ref-byte-array-no-offset']:
                 translations['has_offset'] = 'TRUE' if field['format'] == 'ref-byte-array' else 'FALSE'
                 if 'array-size-field' in field:
@@ -438,7 +454,8 @@ class Struct:
                         '    {\n'
                         '        const guint8 *tmp;\n'
                         '\n'
-                        '        tmp = _mbim_message_read_byte_array (self, relative_offset, offset, ${has_offset}, FALSE, NULL);\n'
+                        '        if (!_mbim_message_read_byte_array (self, relative_offset, offset, ${has_offset}, FALSE, out->${array_size_field_name_underscore}, &tmp, NULL, error))\n'
+                        '            goto out;\n'
                         '        out->${field_name_underscore} = g_malloc (out->${array_size_field_name_underscore});\n'
                         '        memcpy (out->${field_name_underscore}, tmp, out->${array_size_field_name_underscore});\n'
                         '        offset += 4;\n'
@@ -449,7 +466,8 @@ class Struct:
                         '    {\n'
                         '        const guint8 *tmp;\n'
                         '\n'
-                        '        tmp = _mbim_message_read_byte_array (self, relative_offset, offset, ${has_offset}, TRUE, &(out->${field_name_underscore}_size));\n'
+                        '        if (!_mbim_message_read_byte_array (self, relative_offset, offset, ${has_offset}, TRUE, 0, &tmp, &(out->${field_name_underscore}_size), error))\n'
+                        '            goto out;\n'
                         '        out->${field_name_underscore} = g_malloc (out->${field_name_underscore}_size);\n'
                         '        memcpy (out->${field_name_underscore}, tmp, out->${field_name_underscore}_size);\n'
                         '        offset += 8;\n'
@@ -460,7 +478,8 @@ class Struct:
                     '    {\n'
                     '        const guint8 *tmp;\n'
                     '\n'
-                    '        tmp = _mbim_message_read_byte_array (self, relative_offset, offset, FALSE, FALSE, &(out->${field_name_underscore}_size));\n'
+                    '        if (!_mbim_message_read_byte_array (self, relative_offset, offset, FALSE, FALSE, 0, &tmp, &(out->${field_name_underscore}_size), error))\n'
+                    '            goto out;\n'
                     '        out->${field_name_underscore} = g_malloc (out->${field_name_underscore}_size);\n'
                     '        memcpy (out->${field_name_underscore}, tmp, out->${field_name_underscore}_size);\n'
                     '        /* no offset update expected, this should be the last field */\n'
@@ -472,57 +491,87 @@ class Struct:
                     '    {\n'
                     '        const guint8 *tmp;\n'
                     '\n'
-                    '        tmp = _mbim_message_read_byte_array (self, relative_offset, offset, FALSE, FALSE, NULL));\n'
+                    '        if (!_mbim_message_read_byte_array (self, relative_offset, offset, FALSE, FALSE, ${array_size}, &tmp, NULL, error))\n'
+                    '            goto out;\n'
                     '        memcpy (out->${field_name_underscore}, tmp, ${array_size});\n'
                     '        offset += ${array_size};\n'
                     '    }\n')
             elif field['format'] == 'guint32':
                 inner_template += (
                     '\n'
-                    '    out->${field_name_underscore} = _mbim_message_read_guint32 (self, offset);\n'
+                    '    if (!_mbim_message_read_guint32 (self, offset, &out->${field_name_underscore}, error))\n'
+                    '        goto out;\n'
                     '    offset += 4;\n')
             elif field['format'] == 'guint32-array':
                 translations['array_size_field_name_underscore'] = utils.build_underscore_name_from_camelcase(field['array-size-field'])
                 inner_template += (
                     '\n'
-                    '    out->${field_name_underscore} = _mbim_message_read_guint32_array (self, out->${array_size_field_name_underscore}, offset);\n'
+                    '    if (!_mbim_message_read_guint32_array (self, out->${array_size_field_name_underscore}, offset, &out->${field_name_underscore}, error))\n'
+                    '        goto out;\n'
                     '    offset += (4 * out->${array_size_field_name_underscore});\n')
             elif field['format'] == 'guint64':
                 inner_template += (
                     '\n'
-                    '    out->${field_name_underscore} = _mbim_message_read_guint64 (self, offset);\n'
+                    '    if (!_mbim_message_read_guint64 (self, offset, &out->${field_name_underscore}, error))\n'
+                    '        goto out;\n'
                     '    offset += 8;\n')
             elif field['format'] == 'string':
                 inner_template += (
                     '\n'
-                    '    out->${field_name_underscore} = _mbim_message_read_string (self, relative_offset, offset);\n'
+                    '    if (!_mbim_message_read_string (self, relative_offset, offset, &out->${field_name_underscore}, error))\n'
+                    '        goto out;\n'
                     '    offset += 8;\n')
             elif field['format'] == 'string-array':
                 translations['array_size_field_name_underscore'] = utils.build_underscore_name_from_camelcase(field['array-size-field'])
                 inner_template += (
                     '\n'
-                    '    out->${field_name_underscore} = _mbim_message_read_string_array (self, out->${array_size_field_name_underscore}, relative_offset, offset);\n'
+                    '    if (!_mbim_message_read_string_array (self, out->${array_size_field_name_underscore}, relative_offset, offset, &out->${field_name_underscore}, error))\n'
+                    '        goto out;\n'
                     '    offset += (8 * out->${array_size_field_name_underscore});\n')
             elif field['format'] == 'ipv4':
                 inner_template += (
                     '\n'
-                    '    memcpy (&(out->${field_name_underscore}), _mbim_message_read_ipv4 (self, offset, FALSE), 4);\n'
-                    '    offset += 4;\n')
+                    '    {\n'
+                    '        const MbimIPv4 *tmp;\n'
+                    '\n'
+                    '        if (!_mbim_message_read_ipv4 (self, offset, FALSE, &tmp, error))\n'
+                    '            goto out;\n'
+                    '        memcpy (&(out->${field_name_underscore}), tmp, 4);\n'
+                    '        offset += 4;\n'
+                    '    }\n')
             elif field['format'] == 'ref-ipv4':
                 inner_template += (
                     '\n'
-                    '    memcpy (&(out->${field_name_underscore}), _mbim_message_read_ipv4 (self, offset, TRUE), 4);\n'
-                    '    offset += 4;\n')
+                    '    {\n'
+                    '        const MbimIPv4 *tmp;\n'
+                    '\n'
+                    '        if (!_mbim_message_read_ipv4 (self, offset, TRUE, &tmp, error))\n'
+                    '            goto out;\n'
+                    '        memcpy (&(out->${field_name_underscore}), tmp, 4);\n'
+                    '        offset += 4;\n'
+                    '    }\n')
             elif field['format'] == 'ipv6':
                 inner_template += (
                     '\n'
-                    '    memcpy (&(out->${field_name_underscore}), _mbim_message_read_ipv6 (self, offset, FALSE), 16);\n'
-                    '    offset += 16;\n')
+                    '    {\n'
+                    '        const MbimIPv6 *tmp;\n'
+                    '\n'
+                    '        if (!_mbim_message_read_ipv6 (self, offset, FALSE, &tmp, error))\n'
+                    '            goto out;\n'
+                    '        memcpy (&(out->${field_name_underscore}), tmp, 16);\n'
+                    '        offset += 16;\n'
+                    '    }\n')
             elif field['format'] == 'ref-ipv6':
                 inner_template += (
                     '\n'
-                    '    memcpy (&(out->${field_name_underscore}), _mbim_message_read_ipv6 (self, offset, TRUE), 16);\n'
-                    '    offset += 4;\n')
+                    '    {\n'
+                    '        const MbimIPv6 *tmp;\n'
+                    '\n'
+                    '        if (!_mbim_message_read_ipv6 (self, offset, FALSE, &tmp, error))\n'
+                    '            goto out;\n'
+                    '        memcpy (&(out->${field_name_underscore}), tmp, 16);\n'
+                    '        offset += 4;\n'
+                    '    }\n')
             else:
                 raise ValueError('Cannot handle format \'%s\' in struct' % field['format'])
 
@@ -530,45 +579,79 @@ class Struct:
 
         template += (
             '\n'
-            '    if (bytes_read)\n'
-            '        *bytes_read = (offset - relative_offset);\n'
+            '    success = TRUE;\n'
             '\n'
-            '    return out;\n'
+            ' out:\n'
+            '    if (success) {\n'
+            '        if (bytes_read)\n'
+            '            *bytes_read = (offset - relative_offset);\n'
+            '        return out;\n'
+            '    }\n'
+            '\n')
+
+        for field in self.contents:
+            translations['field_name_underscore'] = utils.build_underscore_name_from_camelcase(field['name'])
+            inner_template = ''
+            if field['format'] in ['ref-byte-array', 'ref-byte-array-no-offset', 'unsized-byte-array', 'byte-array', 'string']:
+                inner_template = ('    g_free (out->${field_name_underscore});\n')
+            elif field['format'] == 'string-array':
+                inner_template = ('    g_strfreev (out->${field_name_underscore});\n')
+            template += string.Template(inner_template).substitute(translations)
+
+        template += (
+            '    g_free (out);\n'
+            '    return NULL;\n'
             '}\n')
         cfile.write(string.Template(template).substitute(translations))
 
-        template = (
-            '\n'
-            'static ${name} **\n'
-            '_mbim_message_read_${name_underscore}_struct_array (\n'
-            '    const MbimMessage *self,\n'
-            '    guint32 array_size,\n'
-            '    guint32 relative_offset_array_start,\n'
-            '    gboolean refs)\n'
-            '{\n'
-            '    ${name} **out;\n'
-            '    guint32 i;\n'
-            '    guint32 offset;\n'
-            '\n'
-            '    if (!array_size)\n'
-            '        return NULL;\n'
-            '\n'
-            '    out = g_new (${name} *, array_size + 1);\n'
-            '\n'
-            '    if (!refs) {\n'
-            '        offset = _mbim_message_read_guint32 (self, relative_offset_array_start);\n'
-            '        for (i = 0; i < array_size; i++, offset += ${struct_size})\n'
-            '            out[i] = _mbim_message_read_${name_underscore}_struct (self, offset, NULL);\n'
-            '    } else {\n'
-            '        offset = relative_offset_array_start;\n'
-            '        for (i = 0; i < array_size; i++, offset += 8)\n'
-            '            out[i] = _mbim_message_read_${name_underscore}_struct (self, _mbim_message_read_guint32 (self, offset), NULL);\n'
-            '    }\n'
-            '    out[array_size] = NULL;\n'
-            '\n'
-            '    return out;\n'
-            '}\n')
-        cfile.write(string.Template(template).substitute(translations))
+        if self.array_member:
+            template = (
+                '\n'
+                'static gboolean\n'
+                '_mbim_message_read_${name_underscore}_struct_array (\n'
+                '    const MbimMessage *self,\n'
+                '    guint32 array_size,\n'
+                '    guint32 relative_offset_array_start,\n'
+                '    gboolean refs,\n'
+                '    ${name}Array **out_array,\n'
+                '    GError **error)\n'
+                '{\n'
+                '    GError *inner_error = NULL;\n'
+                '    ${name}Array *out;\n'
+                '    guint32 i;\n'
+                '    guint32 offset;\n'
+                '\n'
+                '    if (!array_size) {\n'
+                '        *out_array = NULL;\n'
+                '        return TRUE;\n'
+                '    }\n'
+                '\n'
+                '    out = g_new0 (${name} *, array_size + 1);\n'
+                '\n'
+                '    if (!refs) {\n'
+                '        _mbim_message_read_guint32 (self, relative_offset_array_start, &offset, &inner_error);\n'
+                '        for (i = 0; !inner_error && (i < array_size); i++, offset += ${struct_size})\n'
+                '            out[i] = _mbim_message_read_${name_underscore}_struct (self, offset, NULL, &inner_error);\n'
+                '    } else {\n'
+                '        offset = relative_offset_array_start;\n'
+                '        for (i = 0; !inner_error && (i < array_size); i++, offset += 8) {\n'
+                '            guint32 tmp_offset;\n'
+                '\n'
+                '            if (_mbim_message_read_guint32 (self, offset, &tmp_offset, &inner_error))\n'
+                '                out[i] = _mbim_message_read_${name_underscore}_struct (self, tmp_offset, NULL, &inner_error);\n'
+                '        }\n'
+                '    }\n'
+                '\n'
+                '    if (!inner_error) {\n'
+                '        *out_array = out;\n'
+                '        return TRUE;\n'
+                '    }\n'
+                '\n'
+                '    ${name_underscore}_array_free (out);\n'
+                '    g_propagate_error (error, inner_error);\n'
+                '    return FALSE;\n'
+                '}\n')
+            cfile.write(string.Template(template).substitute(translations))
 
 
     """
@@ -777,6 +860,9 @@ class Struct:
         template = (
             '<SUBSECTION ${struct_name}>\n'
             '${struct_name}\n')
+        if self.array_member == True:
+            template += (
+                '${struct_name}Array\n')
         if self.single_member == True:
             template += (
                 '${name_underscore}_free\n')

@@ -769,8 +769,9 @@ process_internal_proxy_config (MbimProxy   *self,
     }
 
     /* Retrieve path from request */
-    incoming_path = _mbim_message_read_string (message, 0, 0);
-    if (!incoming_path) {
+    if (!_mbim_message_read_string (message, 0, 0, &incoming_path, &error)) {
+        g_warning ("Error reading device path from message: %s", error->message);
+        g_error_free (error);
         request->response = build_proxy_control_command_done (message, MBIM_STATUS_ERROR_INVALID_PARAMETERS);
         request_complete_and_free (request);
         return TRUE;
@@ -802,7 +803,13 @@ process_internal_proxy_config (MbimProxy   *self,
     }
 
     /* Read requested timeout value */
-    request->timeout_secs = _mbim_message_read_guint32 (message, 8);
+    if (!_mbim_message_read_guint32 (message, 8, &request->timeout_secs, &error)) {
+        g_warning ("Error reading requested timeout from message: %s", error->message);
+        g_error_free (error);
+        request->response = build_proxy_control_command_done (message, MBIM_STATUS_ERROR_INVALID_PARAMETERS);
+        request_complete_and_free (request);
+        return TRUE;
+    }
 
     /* Check if some other client already handled the same device */
     device = peek_device_for_path (self, path);
@@ -840,11 +847,23 @@ static void
 track_service_subscribe_list (Client      *client,
                               MbimMessage *message)
 {
+    GError          *error = NULL;
+    MbimEventEntry **mbim_event_entry_array;
+    gsize            mbim_event_entry_array_size;
+
+    mbim_event_entry_array = _mbim_proxy_helper_service_subscribe_request_parse (message, &mbim_event_entry_array_size, &error);
+    if (error) {
+        g_warning ("Invalid subscribe request message: %s", error->message);
+        g_error_free (error);
+        return;
+    }
+
     /* On each new request from the client, it should provide the FULL list of
      * events it's subscribed to, so we can safely recreate the whole array each
      * time. */
     g_clear_pointer (&client->mbim_event_entry_array, mbim_event_entry_array_free);
-    client->mbim_event_entry_array = _mbim_proxy_helper_service_subscribe_request_parse (message, &client->mbim_event_entry_array_size);
+    client->mbim_event_entry_array = mbim_event_entry_array;
+    client->mbim_event_entry_array_size = mbim_event_entry_array_size;
 
     if (mbim_utils_get_traces_enabled ()) {
         g_debug ("Client (%d) service subscribe list built", g_socket_get_fd (g_socket_connection_get_socket (client->connection)));
@@ -1031,6 +1050,13 @@ process_message (MbimProxy   *self,
             return process_device_service_subscribe_list (self, client, message);
         /* Otherwise, standard command to forward */
         return process_command (self, client, message);
+    case MBIM_MESSAGE_TYPE_INVALID:
+    case MBIM_MESSAGE_TYPE_COMMAND_DONE:
+    case MBIM_MESSAGE_TYPE_INDICATE_STATUS:
+    case MBIM_MESSAGE_TYPE_HOST_ERROR:
+    case MBIM_MESSAGE_TYPE_OPEN_DONE:
+    case MBIM_MESSAGE_TYPE_CLOSE_DONE:
+    case MBIM_MESSAGE_TYPE_FUNCTION_ERROR:
     default:
         g_debug ("invalid message from client: not a command message");
         return FALSE;

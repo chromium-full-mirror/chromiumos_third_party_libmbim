@@ -91,9 +91,10 @@ enum {
 static guint signals[SIGNAL_LAST] = { 0 };
 
 typedef enum {
-    TRANSACTION_TYPE_HOST  = 0,
-    TRANSACTION_TYPE_MODEM = 1,
-    TRANSACTION_TYPE_LAST  = 2
+    TRANSACTION_TYPE_UNKNOWN = -1,
+    TRANSACTION_TYPE_HOST    = 0,
+    TRANSACTION_TYPE_MODEM   = 1,
+    TRANSACTION_TYPE_LAST    = 2
 } TransactionType;
 
 typedef enum {
@@ -258,6 +259,8 @@ device_release_transaction (MbimDevice      *self,
     GTask              *task;
     TransactionContext *ctx;
 
+    g_assert ((type != TRANSACTION_TYPE_UNKNOWN) && (type < TRANSACTION_TYPE_LAST));
+
     /* Only return transaction if it was released from the HT */
     if (!self->priv->transactions[type])
         return NULL;
@@ -356,6 +359,8 @@ device_store_transaction (MbimDevice       *self,
 {
     TransactionContext *ctx;
 
+    g_assert ((type != TRANSACTION_TYPE_UNKNOWN) && (type < TRANSACTION_TYPE_LAST));
+
     transaction_task_trace (task, "store");
 
     if (G_UNLIKELY (!self->priv->transactions[type]))
@@ -363,14 +368,18 @@ device_store_transaction (MbimDevice       *self,
 
     ctx = g_task_get_task_data (task);
 
-    ctx->wait_ctx = g_slice_new (TransactionWaitContext);
-    ctx->wait_ctx->self = self;
-     /* valid as long as the transaction is in the HT */
-    ctx->wait_ctx->transaction_id = ctx->transaction_id;
-    ctx->wait_ctx->type = type;
+    /* When storing the transaction in the device, we have two options: either this
+     * is a completely new transaction, or this is a transaction that had already been
+     * previously stored (e.g. when waiting for more fragments). In the latter case,
+     * make sure we don't reset the wait context or the timeout. */
 
-    /* don't add timeout if one already exists */
+    /* don't add timeout and setup wait context if one already exists */
     if (!ctx->timeout_source) {
+        g_assert (!ctx->wait_ctx);
+        ctx->wait_ctx = g_slice_new (TransactionWaitContext);
+        ctx->wait_ctx->self = self;
+        ctx->wait_ctx->transaction_id = ctx->transaction_id;
+        ctx->wait_ctx->type = type;
         ctx->timeout_source = g_timeout_source_new (timeout_ms);
         g_source_set_callback (ctx->timeout_source, (GSourceFunc)transaction_timed_out, ctx->wait_ctx, NULL);
         g_source_attach (ctx->timeout_source, g_main_context_get_thread_default ());
@@ -579,11 +588,13 @@ process_message (MbimDevice        *self,
         GError             *error = NULL;
         GTask              *task;
         TransactionContext *ctx;
+        TransactionType     transaction_type = TRANSACTION_TYPE_UNKNOWN;
 
         if (MBIM_MESSAGE_GET_MESSAGE_TYPE (message) == MBIM_MESSAGE_TYPE_INDICATE_STATUS) {
             /* Grab transaction */
+            transaction_type = TRANSACTION_TYPE_MODEM;
             task = device_release_transaction (self,
-                                               TRANSACTION_TYPE_MODEM,
+                                               transaction_type,
                                                MBIM_MESSAGE_TYPE_INDICATE_STATUS,
                                                mbim_message_get_transaction_id (message));
 
@@ -598,8 +609,9 @@ process_message (MbimDevice        *self,
         } else {
             /* Grab transaction. This is a _DONE message, so look for the request
              * that generated the _DONE */
+            transaction_type = TRANSACTION_TYPE_HOST;
             task = device_release_transaction (self,
-                                               TRANSACTION_TYPE_HOST,
+                                               transaction_type,
                                                (MBIM_MESSAGE_GET_MESSAGE_TYPE (message) - 0x80000000),
                                                mbim_message_get_transaction_id (message));
             if (!task) {
@@ -669,7 +681,7 @@ process_message (MbimDevice        *self,
 
         /* Need more fragments, store transaction */
         g_assert (device_store_transaction (self,
-                                            TRANSACTION_TYPE_HOST,
+                                            transaction_type,
                                             task,
                                             MAX_TIME_BETWEEN_FRAGMENTS_MS,
                                             NULL));
@@ -723,6 +735,7 @@ process_message (MbimDevice        *self,
     case MBIM_MESSAGE_TYPE_CLOSE:
     case MBIM_MESSAGE_TYPE_COMMAND:
     case MBIM_MESSAGE_TYPE_HOST_ERROR:
+    default:
         /* Shouldn't expect host-generated messages as replies */
         g_message ("[%s] Host-generated message received: ignoring",
                    self->priv->path_display);
@@ -1369,6 +1382,7 @@ open_message_ready (MbimDevice   *self,
     if (!response) {
         /* If we get reported that the state is unknown, try to close before open */
         if (g_error_matches (error, MBIM_CORE_ERROR, MBIM_CORE_ERROR_UNKNOWN_STATE)) {
+            g_clear_error (&error);
             ctx->close_before_open = TRUE;
             ctx->step = DEVICE_OPEN_CONTEXT_STEP_CLOSE_MESSAGE;
             device_open_context_step (task);
@@ -1377,7 +1391,7 @@ open_message_ready (MbimDevice   *self,
 
         /* Check if we should be retrying after a timeout */
         if (g_error_matches (error, MBIM_CORE_ERROR, MBIM_CORE_ERROR_TIMEOUT)) {
-            /* Retry same step */
+            g_clear_error (&error);
             device_open_context_step (task);
             return;
         }
@@ -1590,7 +1604,7 @@ device_open_context_step (GTask *task)
         self->priv->open_status = OPEN_STATUS_OPENING;
 
         ctx->step++;
-        /* Fall down */
+        /* Fall through */
 
     case DEVICE_OPEN_CONTEXT_STEP_CREATE_IOCHANNEL:
         create_iochannel (self,
@@ -1605,7 +1619,7 @@ device_open_context_step (GTask *task)
             return;
         }
         ctx->step++;
-        /* Fall down */
+        /* Fall through */
 
     case DEVICE_OPEN_CONTEXT_STEP_CLOSE_MESSAGE:
         /* Only send an explicit close during open if needed */
@@ -1615,7 +1629,7 @@ device_open_context_step (GTask *task)
             return;
         }
         ctx->step++;
-        /* Fall down */
+        /* Fall through */
 
     case DEVICE_OPEN_CONTEXT_STEP_OPEN_MESSAGE:
         /* If the device is already in-session, avoid the open message */
@@ -1624,7 +1638,7 @@ device_open_context_step (GTask *task)
             return;
         }
         ctx->step++;
-        /* Fall down */
+        /* Fall through */
 
     case DEVICE_OPEN_CONTEXT_STEP_LAST:
         /* Nothing else to process, complete without error */
@@ -1957,6 +1971,10 @@ device_write (MbimDevice    *self,
         case G_IO_STATUS_AGAIN:
             /* We're in a non-blocking channel and therefore we're up to receive
              * EAGAIN; just retry in this case. TODO: in an idle? */
+            break;
+
+        default:
+            g_assert_not_reached ();
             break;
         }
     }

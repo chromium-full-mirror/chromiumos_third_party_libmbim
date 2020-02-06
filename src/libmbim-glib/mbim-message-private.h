@@ -18,7 +18,7 @@
  * Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
  * Boston, MA 02110-1301 USA.
  *
- * Copyright (C) 2013 - 2014 Aleksander Morgado <aleksander@aleksander.es>
+ * Copyright (C) 2013 - 2019 Aleksander Morgado <aleksander@aleksander.es>
  *
  * This is a private non-installed header
  */
@@ -256,40 +256,63 @@ void                       _mbim_message_command_builder_append_ipv6_array    (M
 /*****************************************************************************/
 /* Message parser */
 
-const guint8    *_mbim_message_read_byte_array    (const MbimMessage *self,
-                                                   guint32            struct_start_offset,
-                                                   guint32            relative_offset,
-                                                   gboolean           has_offset,
-                                                   gboolean           has_length,
-                                                   guint32           *array_size);
-const MbimUuid  *_mbim_message_read_uuid          (const MbimMessage *self,
-                                                   guint32            relative_offset);
-guint32          _mbim_message_read_guint32       (const MbimMessage *self,
-                                                   guint32            relative_offset);
-guint32         *_mbim_message_read_guint32_array (const MbimMessage *self,
-                                                   guint32            array_size,
-                                                   guint32            relative_offset_array_start);
-guint64          _mbim_message_read_guint64       (const MbimMessage *self,
-                                                   guint64            relative_offset);
-gchar           *_mbim_message_read_string        (const MbimMessage *self,
-                                                   guint32            struct_start_offset,
-                                                   guint32            relative_offset);
-gchar          **_mbim_message_read_string_array  (const MbimMessage *self,
-                                                   guint32            array_size,
-                                                   guint32            struct_start_offset,
-                                                   guint32            relative_offset_array_start);
-const MbimIPv4  *_mbim_message_read_ipv4          (const MbimMessage *self,
-                                                   guint32            relative_offset,
-                                                   gboolean           ref);
-MbimIPv4        *_mbim_message_read_ipv4_array    (const MbimMessage *self,
-                                                   guint32            array_size,
-                                                   guint32            relative_offset_array_start);
-const MbimIPv6  *_mbim_message_read_ipv6          (const MbimMessage *self,
-                                                   guint32            relative_offset,
-                                                   gboolean           ref);
-MbimIPv6        *_mbim_message_read_ipv6_array    (const MbimMessage *self,
-                                                   guint32            array_size,
-                                                   guint32            relative_offset_array_start);
+gboolean _mbim_message_read_byte_array    (const MbimMessage  *self,
+                                           guint32             struct_start_offset,
+                                           guint32             relative_offset,
+                                           gboolean            has_offset,
+                                           gboolean            has_length,
+                                           guint32             explicit_array_size,
+                                           const guint8      **array,
+                                           guint32            *array_size,
+                                           GError            **error);
+gboolean _mbim_message_read_uuid          (const MbimMessage  *self,
+                                           guint32             relative_offset,
+                                           const MbimUuid    **uuid,
+                                           GError            **error);
+gboolean _mbim_message_read_guint32       (const MbimMessage  *self,
+                                           guint32             relative_offset,
+                                           guint32            *value,
+                                           GError            **error);
+gboolean _mbim_message_read_guint32_array (const MbimMessage  *self,
+                                           guint32             array_size,
+                                           guint32             relative_offset_array_start,
+                                           guint32           **array,
+                                           GError            **error);
+gboolean _mbim_message_read_guint64       (const MbimMessage  *self,
+                                           guint64             relative_offset,
+                                           guint64            *value,
+                                           GError            **error);
+gboolean _mbim_message_read_string        (const MbimMessage  *self,
+                                           guint32             struct_start_offset,
+                                           guint32             relative_offset,
+                                           gchar             **str,
+                                           GError            **error);
+gboolean _mbim_message_read_string_array  (const MbimMessage   *self,
+                                           guint32              array_size,
+                                           guint32              struct_start_offset,
+                                           guint32              relative_offset_array_start,
+                                           gchar             ***array,
+                                           GError             **error);
+gboolean _mbim_message_read_ipv4          (const MbimMessage  *self,
+                                           guint32             relative_offset,
+                                           gboolean            ref,
+                                           const MbimIPv4    **ipv4,
+                                           GError            **error);
+gboolean _mbim_message_read_ipv4_array    (const MbimMessage  *self,
+                                           guint32             array_size,
+                                           guint32             relative_offset_array_start,
+                                           MbimIPv4          **array,
+                                           GError            **error);
+gboolean _mbim_message_read_ipv6          (const MbimMessage  *self,
+                                           guint32             relative_offset,
+                                           gboolean            ref,
+                                           const MbimIPv6    **ipv6,
+                                           GError            **error);
+gboolean _mbim_message_read_ipv6_array    (const MbimMessage  *self,
+                                           guint32             array_size,
+                                           guint32             relative_offset_array_start,
+                                           MbimIPv6          **array,
+                                           GError            **error);
 
 G_END_DECLS
 

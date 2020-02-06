@@ -3,7 +3,7 @@ AC_PREREQ([2.68])
 
 dnl The libmbim version number
 m4_define([mbim_major_version], [1])
-m4_define([mbim_minor_version], [21])
+m4_define([mbim_minor_version], [23])
 m4_define([mbim_micro_version], [0])
 m4_define([mbim_version],
           [mbim_major_version.mbim_minor_version.mbim_micro_version])
@@ -17,7 +17,7 @@ dnl            with old code), increment a.
 dnl        If the interface has changed in an incompatible way (that is,
 dnl            functions have changed or been removed), then zero a.
 m4_define([mbim_glib_lt_current],  [8])
-m4_define([mbim_glib_lt_revision], [1])
+m4_define([mbim_glib_lt_revision], [2])
 m4_define([mbim_glib_lt_age],      [4])
 
 
@@ -43,8 +43,32 @@ dnl Initialize libtool
 LT_PREREQ([2.2])
 LT_INIT
 
-dnl Specific warnings to always use
-LIBMBIM_COMPILER_WARNINGS
+dnl-----------------------------------------------------------------------------
+dnl Compiler warnings
+dnl
+
+dnl Make sure autoconf-archive is available
+m4_pattern_forbid([^AX_(COMPILER_FLAGS|COMPILER_FLAGS_(CFLAGS|GIR|LDFLAGS))\b],
+  [Unexpanded AX_ macro found. Please install GNU autoconf-archive])
+
+dnl Detect git or release builds
+AX_IS_RELEASE([git-directory])
+
+dnl Function type cast disabled: used throughout the code especially to
+dnl cast GAsyncReadyCallbacks with the real object type instead of GObject
+DISABLED_WARNINGS="${DISABLED_WARNINGS} -Wno-cast-function-type"
+
+dnl All message protocol structs are packed, never complain about it
+DISABLED_WARNINGS="${DISABLED_WARNINGS} -Wno-packed"
+
+dnl Setup compiler checks
+AX_COMPILER_FLAGS()
+AX_COMPILER_FLAGS_CFLAGS(,,,[${DISABLED_WARNINGS}])
+
+dnl Specify gnu89 mode
+if test "$GCC" = "yes"; then
+   CFLAGS="$CFLAGS -std=gnu89"
+fi
 
 dnl Version stuff
 MBIM_MAJOR_VERSION=mbim_major_version
@@ -65,9 +89,9 @@ AC_SUBST(MBIM_GLIB_LT_REVISION)
 AC_SUBST(MBIM_GLIB_LT_AGE)
 
 dnl Required dependency versions
-GLIB_MIN_VERSION=2.36
+GLIB_MIN_VERSION=2.48
 
-GLIB_BUILD_SYMBOLS="-DGLIB_VERSION_MIN_REQUIRED=GLIB_VERSION_2_36 -DGLIB_VERSION_MAX_ALLOWED=GLIB_VERSION_2_36 -DGLIB_DISABLE_DEPRECATION_WARNINGS"
+GLIB_BUILD_SYMBOLS="-DGLIB_VERSION_MIN_REQUIRED=GLIB_VERSION_2_48 -DGLIB_VERSION_MAX_ALLOWED=GLIB_VERSION_2_48 -DGLIB_DISABLE_DEPRECATION_WARNINGS"
 
 dnl General dependencies for common
 PKG_CHECK_MODULES(MBIM_COMMON,
@@ -209,6 +233,8 @@ echo "
       compiler:             ${CC}
       cflags:               ${CFLAGS}
       ldflags:              ${LDFLAGS}
+      warn cflags:          ${WARN_CFLAGS}
+      warn ldflags:         ${WARN_LDFLAGS}
       Maintainer mode:      ${USE_MAINTAINER_MODE}
       Documentation:        ${enable_gtk_doc}
 
