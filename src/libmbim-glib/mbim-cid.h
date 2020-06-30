@@ -35,6 +35,14 @@
 G_BEGIN_DECLS
 
 /**
+ * SECTION: mbim-cid
+ * @title: Command IDs
+ * @short_description: Generic command handling routines.
+ *
+ * This section defines the interface of the known command IDs.
+ */
+
+/**
  * MbimCidBasicConnect:
  * @MBIM_CID_BASIC_CONNECT_UNKNOWN: Unknown command.
  * @MBIM_CID_BASIC_CONNECT_DEVICE_CAPS: Device capabilities.
@@ -53,7 +61,7 @@ G_BEGIN_DECLS
  * @MBIM_CID_BASIC_CONNECT_SERVICE_ACTIVATION: Service activation.
  * @MBIM_CID_BASIC_CONNECT_IP_CONFIGURATION: IP configuration.
  * @MBIM_CID_BASIC_CONNECT_DEVICE_SERVICES: Device services.
- * @MBIM_CID_BASIC_CONNECT_DEVICE_SERVICE_SUBSCRIBE_LIST: Device service subscribe list.
+ * @MBIM_CID_BASIC_CONNECT_DEVICE_SERVICE_SUBSCRIBE_LIST: Device service subscribe list. Since 1.8.
  * @MBIM_CID_BASIC_CONNECT_PACKET_STATISTICS: Packet statistics.
  * @MBIM_CID_BASIC_CONNECT_NETWORK_IDLE_HINT: Network idle hint.
  * @MBIM_CID_BASIC_CONNECT_EMERGENCY_MODE: Emergency mode.
@@ -61,8 +69,10 @@ G_BEGIN_DECLS
  * @MBIM_CID_BASIC_CONNECT_MULTICARRIER_PROVIDERS: Multicarrier providers.
  *
  * MBIM commands in the %MBIM_SERVICE_BASIC_CONNECT service.
+ *
+ * Since: 1.0
  */
-typedef enum {
+typedef enum { /*< since=1.0 >*/
     MBIM_CID_BASIC_CONNECT_UNKNOWN                        = 0,
     MBIM_CID_BASIC_CONNECT_DEVICE_CAPS                    = 1,
     MBIM_CID_BASIC_CONNECT_SUBSCRIBER_READY_STATUS        = 2,
@@ -99,8 +109,10 @@ typedef enum {
  * @MBIM_CID_SMS_MESSAGE_STORE_STATUS: Store message status.
  *
  * MBIM commands in the %MBIM_SERVICE_SMS service.
+ *
+ * Since: 1.0
  */
-typedef enum {
+typedef enum { /*< since=1.0 >*/
     MBIM_CID_SMS_UNKNOWN              = 0,
     MBIM_CID_SMS_CONFIGURATION        = 1,
     MBIM_CID_SMS_READ                 = 2,
@@ -111,12 +123,14 @@ typedef enum {
 
 /**
  * MbimCidUssd:
- * @MBIM_CID_USSD_UNKNOWN: Unknown command.
+ * @MBIM_CID_USSD_UNKNOWN: Unknown command. Since 1.4.
  * @MBIM_CID_USSD: USSD operation.
  *
  * MBIM commands in the %MBIM_SERVICE_USSD service.
+ *
+ * Since: 1.0
  */
-typedef enum {
+typedef enum { /*< since=1.0 >*/
     MBIM_CID_USSD_UNKNOWN = 0,
     MBIM_CID_USSD         = 1,
 } MbimCidUssd;
@@ -130,8 +144,10 @@ typedef enum {
  * @MBIM_CID_PHONEBOOK_WRITE: Write.
  *
  * MBIM commands in the %MBIM_SERVICE_PHONEBOOK service.
+ *
+ * Since: 1.0
  */
-typedef enum {
+typedef enum { /*< since=1.0 >*/
     MBIM_CID_PHONEBOOK_UNKNOWN       = 0,
     MBIM_CID_PHONEBOOK_CONFIGURATION = 1,
     MBIM_CID_PHONEBOOK_READ          = 2,
@@ -147,8 +163,10 @@ typedef enum {
  * @MBIM_CID_STK_ENVELOPE: Envelope.
  *
  * MBIM commands in the %MBIM_SERVICE_STK service.
+ *
+ * Since: 1.0
  */
-typedef enum {
+typedef enum { /*< since=1.0 >*/
     MBIM_CID_STK_UNKNOWN           = 0,
     MBIM_CID_STK_PAC               = 1,
     MBIM_CID_STK_TERMINAL_RESPONSE = 2,
@@ -163,8 +181,10 @@ typedef enum {
  * @MBIM_CID_AUTH_SIM: SIM.
  *
  * MBIM commands in the %MBIM_SERVICE_AUTH service.
+ *
+ * Since: 1.0
  */
-typedef enum {
+typedef enum { /*< since=1.0 >*/
     MBIM_CID_AUTH_UNKNOWN = 0,
     MBIM_CID_AUTH_AKA     = 1,
     MBIM_CID_AUTH_AKAP    = 2,
@@ -177,8 +197,10 @@ typedef enum {
  * @MBIM_CID_DSS_CONNECT: Connect.
  *
  * MBIM commands in the %MBIM_SERVICE_DSS service.
+ *
+ * Since: 1.0
  */
-typedef enum {
+typedef enum { /*< since=1.0 >*/
     MBIM_CID_DSS_UNKNOWN = 0,
     MBIM_CID_DSS_CONNECT = 1
 } MbimCidDss;
@@ -189,8 +211,10 @@ typedef enum {
  * @MBIM_CID_MS_FIRMWARE_ID_GET: Get Firmware ID.
  *
  * MBIM commands in the %MBIM_SERVICE_MS_FIRMWARE_ID service.
+ *
+ * Since: 1.8
  */
-typedef enum {
+typedef enum { /*< since=1.0 >*/
     MBIM_CID_MS_FIRMWARE_ID_UNKNOWN = 0,
     MBIM_CID_MS_FIRMWARE_ID_GET     = 1
 } MbimCidMsFirmwareId;
@@ -201,8 +225,10 @@ typedef enum {
  * @MBIM_CID_MS_HOST_SHUTDOWN_NOTIFY: Notify that the host is shutting down.
  *
  * MBIM commands in the %MBIM_SERVICE_MS_HOST_SHUTDOWN service.
+ *
+ * Since: 1.8
  */
-typedef enum {
+typedef enum { /*< since=1.8 >*/
     MBIM_CID_MS_HOST_SHUTDOWN_UNKNOWN = 0,
     MBIM_CID_MS_HOST_SHUTDOWN_NOTIFY  = 1
 } MbimCidMsHostShutdown;
@@ -213,8 +239,10 @@ typedef enum {
  * @MBIM_CID_PROXY_CONTROL_CONFIGURATION: Configuration.
  *
  * MBIM commands in the %MBIM_SERVICE_PROXY_CONTROL service.
+ *
+ * Since: 1.10
  */
-typedef enum {
+typedef enum { /*< since=1.10 >*/
     MBIM_CID_PROXY_CONTROL_UNKNOWN       = 0,
     MBIM_CID_PROXY_CONTROL_CONFIGURATION = 1
 } MbimCidProxyControl;
@@ -225,8 +253,10 @@ typedef enum {
  * @MBIM_CID_QMI_MSG: Send QMI request and receive QMI response.
  *
  * MBIM commands in the %MBIM_SERVICE_QMI service.
+ *
+ * Since: 1.14
  */
-typedef enum {
+typedef enum { /*< since=1.14 >*/
     MBIM_CID_QMI_UNKNOWN = 0,
     MBIM_CID_QMI_MSG     = 1
 } MbimCidQmi;
@@ -241,8 +271,10 @@ typedef enum {
  * @MBIM_CID_ATDS_REGISTER_STATE: Registration state.
  *
  * MBIM commands in the %MBIM_SERVICE_ATDS service.
+ *
+ * Since: 1.16
  */
-typedef enum {
+typedef enum { /*< since=1.16 >*/
     MBIM_CID_ATDS_UNKNOWN        = 0,
     MBIM_CID_ATDS_SIGNAL         = 1,
     MBIM_CID_ATDS_LOCATION       = 2,
@@ -257,8 +289,10 @@ typedef enum {
  * @MBIM_CID_INTEL_FIRMWARE_UPDATE_MODEM_REBOOT: Reboot modem for firmware update.
  *
  * MBIM commands in the %MBIM_SERVICE_INTEL_FIRMWARE_UPDATE service.
+ *
+ * Since: 1.16
  */
-typedef enum {
+typedef enum { /*< since=1.16 >*/
     MBIM_CID_INTEL_FIRMWARE_UPDATE_UNKNOWN      = 0,
     MBIM_CID_INTEL_FIRMWARE_UPDATE_MODEM_REBOOT = 1,
 } MbimCidIntelFirmwareUpdate;
@@ -278,8 +312,10 @@ typedef enum {
  * @MBIM_CID_MS_BASIC_CONNECT_EXTENSIONS_DEVICE_RESET: Device reset.
  *
  * MBIM commands in the %MBIM_SERVICE_MS_BASIC_CONNECT_EXTENSIONS service.
+ *
+ * Since: 1.18
  */
-typedef enum {
+typedef enum { /*< since=1.18 >*/
     MBIM_CID_MS_BASIC_CONNECT_EXTENSIONS_UNKNOWN                  = 0,
     MBIM_CID_MS_BASIC_CONNECT_EXTENSIONS_PROVISIONED_CONTEXTS     = 1,
     MBIM_CID_MS_BASIC_CONNECT_EXTENSIONS_NETWORK_BLACKLIST        = 2,
@@ -295,12 +331,61 @@ typedef enum {
 
 /* Command helpers */
 
-gboolean     mbim_cid_can_set       (MbimService service,
-                                     guint       cid);
-gboolean     mbim_cid_can_query     (MbimService service,
-                                     guint       cid);
-gboolean     mbim_cid_can_notify    (MbimService service,
-                                     guint       cid);
+/**
+ * mbim_cid_can_set:
+ * @service: a #MbimService.
+ * @cid: a command ID.
+ *
+ * Checks whether the given command allows setting.
+ *
+ * Returns: %TRUE if the command allows setting, %FALSE otherwise.
+ *
+ * Since: 1.0
+ */
+gboolean mbim_cid_can_set (MbimService service,
+                           guint       cid);
+
+/**
+ * mbim_cid_can_query:
+ * @service: a #MbimService.
+ * @cid: a command ID.
+ *
+ * Checks whether the given command allows querying.
+ *
+ * Returns: %TRUE if the command allows querying, %FALSE otherwise.
+ *
+ * Since: 1.0
+ */
+gboolean mbim_cid_can_query (MbimService service,
+                             guint       cid);
+
+/**
+ * mbim_cid_can_notify:
+ * @service: a #MbimService.
+ * @cid: a command ID.
+ *
+ * Checks whether the given command allows notifying.
+ *
+ * Returns: %TRUE if the command allows notifying, %FALSE otherwise.
+ *
+ * Since: 1.0
+ */
+gboolean mbim_cid_can_notify (MbimService service,
+                              guint       cid);
+
+
+/**
+ * mbim_cid_get_printable:
+ * @service: a #MbimService.
+ * @cid: a command ID.
+ *
+ * Gets a printable string for the command specified by the @service and the
+ * @cid.
+ *
+ * Returns: a constant string.
+ *
+ * Since: 1.0
+ */
 const gchar *mbim_cid_get_printable (MbimService service,
                                      guint       cid);
 

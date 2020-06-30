@@ -3,7 +3,7 @@ AC_PREREQ([2.68])
 
 dnl The libmbim version number
 m4_define([mbim_major_version], [1])
-m4_define([mbim_minor_version], [23])
+m4_define([mbim_minor_version], [25])
 m4_define([mbim_micro_version], [0])
 m4_define([mbim_version],
           [mbim_major_version.mbim_minor_version.mbim_micro_version])
@@ -16,9 +16,9 @@ dnl        If the interface has grown (that is, the new library is compatible
 dnl            with old code), increment a.
 dnl        If the interface has changed in an incompatible way (that is,
 dnl            functions have changed or been removed), then zero a.
-m4_define([mbim_glib_lt_current],  [8])
-m4_define([mbim_glib_lt_revision], [2])
-m4_define([mbim_glib_lt_age],      [4])
+m4_define([mbim_glib_lt_current],  [9])
+m4_define([mbim_glib_lt_revision], [0])
+m4_define([mbim_glib_lt_age],      [5])
 
 
 AC_INIT([libmbim], [mbim_version], [libmbim-devel@lists.freedesktop.org])
@@ -130,11 +130,11 @@ AC_SUBST(MBIMPROXY_LIBS)
 
 AM_PATH_PYTHON([], [], [PYTHON=python])
 
-GLIB_MKENUMS=`$PKG_CONFIG --variable=glib_mkenums glib-2.0`
-AC_SUBST(GLIB_MKENUMS)
-
 dnl Documentation
 GTK_DOC_CHECK(1.0)
+
+dnl GObject Introspection
+GOBJECT_INTROSPECTION_CHECK([0.9.6])
 
 # MBIM username
 MBIM_USERNAME="root"
@@ -213,6 +213,8 @@ AC_CONFIG_FILES([Makefile
                  src/mbimcli/Makefile
                  src/mbim-proxy/Makefile
                  utils/Makefile
+                 examples/Makefile
+                 examples/simple-tester-python/Makefile
                  docs/Makefile
                  docs/reference/Makefile
                  docs/reference/libmbim-glib/Makefile
@@ -230,19 +232,20 @@ echo "
     ==============================================
 
     Build:
-      compiler:             ${CC}
-      cflags:               ${CFLAGS}
-      ldflags:              ${LDFLAGS}
-      warn cflags:          ${WARN_CFLAGS}
-      warn ldflags:         ${WARN_LDFLAGS}
-      Maintainer mode:      ${USE_MAINTAINER_MODE}
-      Documentation:        ${enable_gtk_doc}
+      compiler:                 ${CC}
+      cflags:                   ${CFLAGS}
+      ldflags:                  ${LDFLAGS}
+      warn cflags:              ${WARN_CFLAGS}
+      warn ldflags:             ${WARN_LDFLAGS}
+      Maintainer mode:          ${USE_MAINTAINER_MODE}
+      Documentation:            ${enable_gtk_doc}
+      gobject introspection:    ${found_introspection}
 
     System paths:
-      prefix:               ${prefix}
-      udev base directory:  ${UDEV_BASE_DIR}
+      prefix:                   ${prefix}
+      udev base directory:      ${UDEV_BASE_DIR}
 
     Features:
-      udev support:         ${with_udev}
-      MBIM username:        ${MBIM_USERNAME_ENABLED} (${MBIM_USERNAME})
+      udev support:             ${with_udev}
+      MBIM username:            ${MBIM_USERNAME_ENABLED} (${MBIM_USERNAME})
 "

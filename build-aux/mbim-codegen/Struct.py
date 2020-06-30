@@ -18,7 +18,6 @@
 #
 
 import string
-
 import utils
 
 """
@@ -32,6 +31,9 @@ class Struct:
     def __init__(self, dictionary):
         self.name = dictionary['name']
         self.contents = dictionary['contents']
+        self.since = dictionary['since'] if 'since' in dictionary else None
+        if self.since is None:
+            raise ValueError('Struct ' + self.name + ' requires a "since" tag specifying the major version where it was introduced')
 
         # Whether the struct is used as a single field, or as an array of
         # fields. Will be updated after having created the object.
@@ -60,7 +62,8 @@ class Struct:
     Emit the new struct type
     """
     def _emit_type(self, hfile):
-        translations = { 'name' : self.name }
+        translations = { 'name'  : self.name,
+                         'since' : self.since }
         template = (
             '\n'
             '/**\n'
@@ -109,6 +112,8 @@ class Struct:
             template += string.Template(inner_template).substitute(translations)
 
         template += (
+            ' *\n'
+            ' * Since: ${since}\n'
             ' */\n'
             'typedef struct {\n')
         for field in self.contents:
@@ -166,13 +171,22 @@ class Struct:
     Emit the type's free methods
     """
     def _emit_free(self, hfile, cfile):
-        translations = { 'name' : self.name,
+        translations = { 'name'  : self.name,
+                         'since' : self.since,
                          'name_underscore' : utils.build_underscore_name_from_camelcase(self.name) }
         template = ''
 
         if self.single_member == True:
             template = (
                 '\n'
+                '/**\n'
+                ' * ${name_underscore}_free:\n'
+                ' * @var: a #${name}.\n'
+                ' *\n'
+                ' * Frees the memory allocated for the #${name}.\n'
+                ' *\n'
+                ' * Since: ${since}\n'
+                ' */\n'
                 'void ${name_underscore}_free (${name} *var);\n'
                 'G_DEFINE_AUTOPTR_CLEANUP_FUNC (${name}, ${name_underscore}_free)\n')
             hfile.write(string.Template(template).substitute(translations))
@@ -228,12 +242,6 @@ class Struct:
         if self.single_member == True:
             template = (
                 '\n'
-                '/**\n'
-                ' * ${name_underscore}_free:\n'
-                ' * @var: a #${name}.\n'
-                ' *\n'
-                ' * Frees the memory allocated for the #${name}.\n'
-                ' */\n'
                 'void\n'
                 '${name_underscore}_free (${name} *var)\n'
                 '{\n'
@@ -242,26 +250,32 @@ class Struct:
             cfile.write(string.Template(template).substitute(translations))
 
         if self.array_member:
+            # TypeArray was introduced in 1.24
+            translations['array_since'] = self.since if utils.version_compare('1.24', self.since) > 0 else '1.24'
             template = (
                 '\n'
                 '/**\n'
                 ' * ${name}Array:\n'
                 ' *\n'
                 ' * A NULL-terminated array of ${name} elements.\n'
+                ' *\n'
+                ' * Since: ${array_since}\n'
                 ' */\n'
                 'typedef ${name} *${name}Array;\n'
+                '/**\n'
+                ' * ${name_underscore}_array_free:\n'
+                ' * @array: a #NULL terminated array of #${name} structs.\n'
+                ' *\n'
+                ' * Frees the memory allocated for the array of #${name}s.\n'
+                ' *\n'
+                ' * Since: ${since}\n'
+                ' */\n'
                 'void ${name_underscore}_array_free (${name}Array *array);\n'
                 'G_DEFINE_AUTOPTR_CLEANUP_FUNC (${name}Array, ${name_underscore}_array_free)\n')
             hfile.write(string.Template(template).substitute(translations))
 
             template = (
                 '\n'
-                '/**\n'
-                ' * ${name_underscore}_array_free:\n'
-                ' * @array: a #NULL terminated array of #${name} structs.\n'
-                ' *\n'
-                ' * Frees the memory allocated for the array of #${name}s.\n'
-                ' */\n'
                 'void\n'
                 '${name_underscore}_array_free (${name}Array *array)\n'
                 '{\n'
@@ -373,8 +387,8 @@ class Struct:
                  field['format'] == 'ipv6' or \
                  field['format'] == 'ref-ipv6':
                 inner_template += (
-                    '        GInetAddress *addr;\n'
-                    '        gchar *tmpstr;\n'
+                    '        g_autoptr(GInetAddress)  addr = NULL;\n'
+                    '        g_autofree gchar        *tmpstr = NULL;\n'
                     '\n')
 
                 if field['format'] == 'ipv4' or \
@@ -388,9 +402,7 @@ class Struct:
 
                 inner_template += (
                     '        tmpstr = g_inet_address_to_string (addr);\n'
-                    '        g_string_append_printf (str, "\'%s\'", tmpstr);\n'
-                    '        g_free (tmpstr);\n'
-                    '        g_object_unref (addr);\n')
+                    '        g_string_append_printf (str, "\'%s\'", tmpstr);\n')
 
             else:
                 raise ValueError('Cannot handle format \'%s\' in struct' % field['format'])
