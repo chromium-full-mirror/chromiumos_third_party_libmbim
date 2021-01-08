@@ -4,7 +4,7 @@ AC_PREREQ([2.68])
 dnl The libmbim version number
 m4_define([mbim_major_version], [1])
 m4_define([mbim_minor_version], [25])
-m4_define([mbim_micro_version], [0])
+m4_define([mbim_micro_version], [1])
 m4_define([mbim_version],
           [mbim_major_version.mbim_minor_version.mbim_micro_version])
 
@@ -152,37 +152,6 @@ fi
 
 AM_CONDITIONAL([MBIM_USERNAME_ENABLED], [test "x$MBIM_USERNAME_ENABLED" = "xyes"])
 
-# udev support (auto)
-GUDEV_VERSION=147
-
-PKG_CHECK_MODULES(GUDEV, [gudev-1.0 >= $GUDEV_VERSION], [have_gudev=yes],[have_gudev=no])
-
-AC_ARG_WITH(udev,
-            AS_HELP_STRING([--with-udev], [Build with udev support [[default=auto]]]),, [with_udev=auto])
-
-if test "x$with_udev" = "xauto"; then
-   if test "x$have_gudev" = "xno"; then
-       with_udev="no"
-   else
-       with_udev="yes"
-   fi
-fi
-
-case $with_udev in
-    yes)
-        if test "x$have_gudev" = "xno"; then
-            AC_MSG_ERROR([Couldn't find gudev >= $GUDEV_VERSION. Install it, or otherwise configure using --without-udev to disable udev support.])
-        else
-            AC_DEFINE(WITH_UDEV, 1, [Define if you want udev support])
-            AC_SUBST(GUDEV_CFLAGS)
-            AC_SUBST(GUDEV_LIBS)
-        fi
-        ;;
-    *)
-        with_udev=no
-        ;;
-esac
-
 # udev base directory
 AC_ARG_WITH(udev-base-dir, AS_HELP_STRING([--with-udev-base-dir=DIR], [where udev base directory is]))
 if test -n "$with_udev_base_dir" ; then
@@ -246,6 +215,5 @@ echo "
       udev base directory:      ${UDEV_BASE_DIR}
 
     Features:
-      udev support:             ${with_udev}
       MBIM username:            ${MBIM_USERNAME_ENABLED} (${MBIM_USERNAME})
 "
