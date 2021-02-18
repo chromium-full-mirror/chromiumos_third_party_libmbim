@@ -1221,6 +1221,8 @@ typedef enum { /*< since=1.18 >*/
  * @MBIM_SAR_CONTROL_MODE_OS: SAR backoff is controlled by the host operating system.
  *
  * SAR backoff mechanism control modes.
+ *
+ * Since: 1.26
  */
 typedef enum { /*< since=1.26 >*/
     MBIM_SAR_CONTROL_MODE_DEVICE = 0,
@@ -1233,6 +1235,8 @@ typedef enum { /*< since=1.26 >*/
  * @MBIM_SAR_BACKOFF_STATE_ENABLED: SAR backoff is enabled.
  *
  * SAR backoff state.
+ *
+ * Since: 1.26
  */
 typedef enum { /*< since=1.26 >*/
     MBIM_SAR_BACKOFF_STATE_DISABLED = 0,
@@ -1245,11 +1249,41 @@ typedef enum { /*< since=1.26 >*/
  * @MBIM_SAR_WIFI_HARDWARE_STATE_NOT_INTEGRATED: Not integrated.
  *
  * Whether the Wi-Fi and cellular SAR are integrated at hardware level.
+ *
+ * Since: 1.26
  */
 typedef enum { /*< since=1.26 >*/
-    MBIM_SAR_WIFI_HARDWARE_STATE_INTEGRATED = 0,
+    MBIM_SAR_WIFI_HARDWARE_STATE_INTEGRATED     = 0,
     MBIM_SAR_WIFI_HARDWARE_STATE_NOT_INTEGRATED = 1
 } MbimSarWifiHardwareState;
+
+/**
+ * MbimTransmissionNotificationStatus:
+ * @MBIM_TRANSMISSION_NOTIFICATION_STATUS_DISABLED: Notification disabled.
+ * @MBIM_TRANSMISSION_NOTIFICATION_STATUS_ENABLED: Notification enabled.
+ *
+ * Whether modem channel transmission status notification is disabled or enabled.
+ *
+ * Since: 1.26
+ */
+typedef enum { /*< since=1.26 >*/
+    MBIM_TRANSMISSION_NOTIFICATION_STATUS_DISABLED = 0,
+    MBIM_TRANSMISSION_NOTIFICATION_STATUS_ENABLED  = 1
+} MbimTransmissionNotificationStatus;
+
+/**
+ * MbimTransmissionState:
+ * @MBIM_TRANSMISSION_STATE_INACTIVE: Modem was not actively transmitting data.
+ * @MBIM_TRANSMISSION_STATE_ACTIVE: Modem was actively transmitting data.
+ *
+ * Whether modem is having TX traffic every hysteresis timeout.
+ *
+ * Since: 1.26
+ */
+typedef enum { /*< since=1.26 >*/
+    MBIM_TRANSMISSION_STATE_INACTIVE = 0,
+    MBIM_TRANSMISSION_STATE_ACTIVE   = 1
+} MbimTransmissionState;
 
 G_END_DECLS
 
