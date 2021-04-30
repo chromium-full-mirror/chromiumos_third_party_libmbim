@@ -17,6 +17,7 @@ GENERATED_H = \
 	mbim-qmi.h \
 	mbim-atds.h \
 	mbim-intel-firmware-update.h \
+	mbim-qdu.h \
 	mbim-ms-basic-connect-extensions.h
 
 GENERATED_C = \
@@ -37,6 +38,7 @@ GENERATED_C = \
 	mbim-qmi.c \
 	mbim-atds.c \
 	mbim-intel-firmware-update.c \
+	mbim-qdu.c \
 	mbim-ms-basic-connect-extensions.c
 
 GENERATED_SECTIONS = \
@@ -54,26 +56,27 @@ GENERATED_SECTIONS = \
 	mbim-qmi.sections \
 	mbim-atds.sections \
 	mbim-intel-firmware-update.sections \
+	mbim-qdu.sections \
 	mbim-ms-basic-connect-extensions.sections
 
 # Error types
-mbim-error-types.h: $(top_srcdir)/src/libmbim-glib/mbim-errors.h $(top_srcdir)/build-aux/templates/mbim-error-types-template.h
+mbim-error-types.h: $(top_srcdir)/src/libmbim-glib/mbim-errors.h $(top_srcdir)/build-aux/templates/mbim-error-types.h.template
 	$(AM_V_GEN) $(PYTHON) $(top_srcdir)/build-aux/mbim-mkenums \
 		--fhead "#ifndef __LIBMBIM_GLIB_ERROR_TYPES_H__\n#define __LIBMBIM_GLIB_ERROR_TYPES_H__\n#include \"mbim-errors.h\"\n" \
-		--template $(top_srcdir)/build-aux/templates/mbim-error-types-template.h \
+		--template $(top_srcdir)/build-aux/templates/mbim-error-types.h.template \
 		--ftail "#endif /* __LIBMBIM_GLIB_ERROR_TYPES_H__ */\n" \
 		$(top_srcdir)/src/libmbim-glib/mbim-errors.h > $@
 
-mbim-error-types.c: $(top_srcdir)/src/libmbim-glib/mbim-errors.h mbim-error-types.h $(top_srcdir)/build-aux/templates/mbim-error-types-template.c
+mbim-error-types.c: $(top_srcdir)/src/libmbim-glib/mbim-errors.h mbim-error-types.h $(top_srcdir)/build-aux/templates/mbim-error-types.c.template
 	$(AM_V_GEN) $(PYTHON) $(top_srcdir)/build-aux/mbim-mkenums \
 		--fhead "#include \"mbim-errors.h\"\n#include \"mbim-error-types.h\"\n" \
-		--template $(top_srcdir)/build-aux/templates/mbim-error-types-template.c \
+		--template $(top_srcdir)/build-aux/templates/mbim-error-types.c.template \
 		$(top_srcdir)/src/libmbim-glib/mbim-errors.h > $@
 
-mbim-error-quarks.c: $(top_srcdir)/src/libmbim-glib/mbim-errors.h mbim-error-types.h $(top_srcdir)/build-aux/templates/mbim-error-quarks-template.c
+mbim-error-quarks.c: $(top_srcdir)/src/libmbim-glib/mbim-errors.h mbim-error-types.h $(top_srcdir)/build-aux/templates/mbim-error-quarks.c.template
 	$(AM_V_GEN) $(PYTHON) $(top_srcdir)/build-aux/mbim-mkenums \
 		--fhead "#include \"mbim-errors.h\"\n#include \"mbim-error-types.h\"\n" \
-		--template $(top_srcdir)/build-aux/templates/mbim-error-quarks-template.c \
+		--template $(top_srcdir)/build-aux/templates/mbim-error-quarks.c.template \
 		$(top_srcdir)/src/libmbim-glib/mbim-errors.h > $@
 
 # Enum/Flag types
@@ -82,17 +85,17 @@ ENUMS = \
 	$(top_srcdir)/src/libmbim-glib/mbim-cid.h \
 	$(top_srcdir)/src/libmbim-glib/mbim-message.h \
 	$(top_srcdir)/src/libmbim-glib/mbim-enums.h
-mbim-enum-types.h:  $(ENUMS) $(top_srcdir)/build-aux/templates/mbim-enum-types-template.h
+mbim-enum-types.h:  $(ENUMS) $(top_srcdir)/build-aux/templates/mbim-enum-types.h.template
 	$(AM_V_GEN) $(PYTHON) $(top_srcdir)/build-aux/mbim-mkenums \
 		--fhead "#ifndef __LIBMBIM_GLIB_ENUM_TYPES_H__\n#define __LIBMBIM_GLIB_ENUM_TYPES_H__\n#include \"mbim-uuid.h\"\n#include \"mbim-cid.h\"\n#include \"mbim-message.h\"\n#include \"mbim-enums.h\"\n" \
-		--template $(top_srcdir)/build-aux/templates/mbim-enum-types-template.h \
+		--template $(top_srcdir)/build-aux/templates/mbim-enum-types.h.template \
 		--ftail "#endif /* __LIBMBIM_GLIB_ENUM_TYPES_H__ */\n" \
 		$(ENUMS) > $@
 
-mbim-enum-types.c: $(ENUMS) mbim-enum-types.h $(top_srcdir)/build-aux/templates/mbim-enum-types-template.c
+mbim-enum-types.c: $(ENUMS) mbim-enum-types.h $(top_srcdir)/build-aux/templates/mbim-enum-types.c.template
 	$(AM_V_GEN) $(PYTHON) $(top_srcdir)/build-aux/mbim-mkenums \
 		--fhead "#include \"mbim-enum-types.h\"\n" \
-		--template $(top_srcdir)/build-aux/templates/mbim-enum-types-template.c \
+		--template $(top_srcdir)/build-aux/templates/mbim-enum-types.c.template \
 		$(ENUMS) > $@
 
 # Basic Connect service
@@ -220,6 +223,15 @@ mbim-intel-firmware-update.h mbim-intel-firmware-update.c mbim-intel-firmware-up
 		$(PYTHON) $(top_srcdir)/build-aux/mbim-codegen/mbim-codegen \
 			--input $(top_srcdir)/data/mbim-service-intel-firmware-update.json \
 			--output mbim-intel-firmware-update
+
+# QDU Service
+mbim-qdu.h mbim-qdu.c mbim-qdu.sections: $(top_srcdir)/data/mbim-service-qdu.json $(top_srcdir)/build-aux/mbim-codegen/*.py $(top_srcdir)/build-aux/mbim-codegen/mbim-codegen
+	$(AM_V_GEN)  \
+		rm -f mbim-qdu.h && \
+		rm -f mbim-qdu.c && \
+		$(PYTHON) $(top_srcdir)/build-aux/mbim-codegen/mbim-codegen \
+			--input $(top_srcdir)/data/mbim-service-qdu.json \
+			--output mbim-qdu
 
 # Microsoft Basic Connect Extensions service
 mbim-ms-basic-connect-extensions.h mbim-ms-basic-connect-extensions.c mbim-ms-basic-connect-extensions.sections: $(top_srcdir)/data/mbim-service-ms-basic-connect-extensions.json $(top_srcdir)/build-aux/mbim-codegen/*.py $(top_srcdir)/build-aux/mbim-codegen/mbim-codegen

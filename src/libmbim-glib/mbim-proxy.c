@@ -35,6 +35,7 @@
 #include "config.h"
 #include "mbim-device.h"
 #include "mbim-utils.h"
+#include "mbim-helpers.h"
 #include "mbim-proxy.h"
 #include "mbim-message-private.h"
 #include "mbim-cid.h"
@@ -43,7 +44,12 @@
 #include "mbim-basic-connect.h"
 #include "mbim-proxy-helpers.h"
 
-#define BUFFER_SIZE 512
+/* The mbim-proxy may be used for bulk data transfer, such as modem
+ * firmware upgrade, and the BUFFER_SIZE should be at least equal
+ * to MAX_CONTROL_TRANSFER which defined in mbim-device.c, which
+ * will bring better performance in such case.
+ */
+#define BUFFER_SIZE 4096
 
 G_DEFINE_TYPE (MbimProxy, mbim_proxy, G_TYPE_OBJECT)
 
@@ -775,7 +781,7 @@ process_internal_proxy_config (MbimProxy   *self,
     /* The incoming path may be a symlink. In the proxy, we always use the real path of the
      * device, so that clients using different symlinks for the same file don't collide with
      * each other. */
-    path = __mbim_utils_get_devpath (incoming_path, &error);
+    path = mbim_helpers_get_devpath (incoming_path, &error);
     if (!path) {
         g_warning ("[client %lu,0x%08x] cannot configure proxy: couldn't lookup real device path: %s",
                    request->client->id, request->original_transaction_id, error->message);
@@ -1189,7 +1195,7 @@ incoming_cb (GSocketService    *service,
         return;
     }
 
-    if (!__mbim_user_allowed (uid, &error)) {
+    if (!mbim_helpers_check_user_allowed (uid, &error)) {
         g_warning ("[client %lu] not allowed: %s", client_id, error->message);
         return;
     }
@@ -1486,7 +1492,7 @@ mbim_proxy_new (GError **error)
 {
     g_autoptr(MbimProxy) self = NULL;
 
-    if (!__mbim_user_allowed (getuid(), error))
+    if (!mbim_helpers_check_user_allowed (getuid(), error))
         return NULL;
 
     self = g_object_new (MBIM_TYPE_PROXY, NULL);

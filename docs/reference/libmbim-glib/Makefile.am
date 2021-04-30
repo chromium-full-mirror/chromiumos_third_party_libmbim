@@ -20,6 +20,7 @@ ALL_SECTIONS = \
 	$(top_builddir)/src/libmbim-glib/generated/mbim-ms-sar.sections \
 	$(top_builddir)/src/libmbim-glib/generated/mbim-qmi.sections \
 	$(top_builddir)/src/libmbim-glib/generated/mbim-atds.sections \
+	$(top_builddir)/src/libmbim-glib/generated/mbim-qdu.sections \
 	$(top_builddir)/src/libmbim-glib/generated/mbim-intel-firmware-update.sections \
 	$(top_builddir)/src/libmbim-glib/generated/mbim-ms-basic-connect-extensions.sections
 
@@ -51,7 +52,9 @@ CFILE_GLOB = \
 
 # Headers to ignore
 IGNORE_HFILES = \
-	mbim-message-private.h
+	mbim-message-private.h \
+	mbim-helpers.h \
+	mbim-net-port-manager.h
 
 # CFLAGS and LDFLAGS for compiling scan program. Only needed
 # if $(DOC_MODULE).types is non-empty.
