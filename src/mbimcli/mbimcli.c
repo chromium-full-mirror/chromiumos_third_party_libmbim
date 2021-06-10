@@ -261,6 +261,12 @@ device_open_ready (MbimDevice   *dev,
         return;
     }
 
+    /* Link management action? */
+    if (mbimcli_link_management_options_enabled ()) {
+        mbimcli_link_management_run (dev, cancellable);
+        return;
+    }
+
     /* Run the service-specific action */
     switch (service) {
     case MBIM_SERVICE_BASIC_CONNECT:
@@ -296,6 +302,7 @@ device_open_ready (MbimDevice   *dev,
     case MBIM_SERVICE_AUTH:
     case MBIM_SERVICE_PROXY_CONTROL:
     case MBIM_SERVICE_QMI:
+    case MBIM_SERVICE_QDU:
         /* unsupported actions in the CLI */
     case MBIM_SERVICE_INVALID:
     default:
@@ -353,32 +360,50 @@ parse_actions (void)
 {
     guint actions_enabled = 0;
 
-    /* Basic Connect options? */
+    if (mbimcli_link_management_options_enabled ())
+        actions_enabled++;
+
     if (mbimcli_basic_connect_options_enabled ()) {
         service = MBIM_SERVICE_BASIC_CONNECT;
         actions_enabled++;
-    } else if (mbimcli_phonebook_options_enabled ()) {
+    }
+
+    if (mbimcli_phonebook_options_enabled ()) {
         service = MBIM_SERVICE_PHONEBOOK;
         actions_enabled++;
-    } else if (mbimcli_dss_options_enabled ()) {
+    }
+
+    if (mbimcli_dss_options_enabled ()) {
         service = MBIM_SERVICE_DSS;
         actions_enabled++;
-    } else if (mbimcli_ms_firmware_id_options_enabled ()) {
+    }
+
+    if (mbimcli_ms_firmware_id_options_enabled ()) {
         service = MBIM_SERVICE_MS_FIRMWARE_ID;
         actions_enabled++;
-    } else if (mbimcli_ms_host_shutdown_options_enabled ()) {
+    }
+
+    if (mbimcli_ms_host_shutdown_options_enabled ()) {
         service = MBIM_SERVICE_MS_HOST_SHUTDOWN;
         actions_enabled++;
-    } else if (mbimcli_ms_sar_options_enabled ()) {
+    }
+
+    if (mbimcli_ms_sar_options_enabled ()) {
         service = MBIM_SERVICE_MS_SAR;
         actions_enabled++;
-    } else if (mbimcli_atds_options_enabled ()) {
+    }
+
+    if (mbimcli_atds_options_enabled ()) {
         service = MBIM_SERVICE_ATDS;
         actions_enabled++;
-    } else if (mbimcli_intel_firmware_update_options_enabled ()) {
+    }
+
+    if (mbimcli_intel_firmware_update_options_enabled ()) {
         service = MBIM_SERVICE_INTEL_FIRMWARE_UPDATE;
         actions_enabled++;
-    } else if (mbimcli_ms_basic_connect_extensions_options_enabled ()) {
+    }
+
+    if (mbimcli_ms_basic_connect_extensions_options_enabled ()) {
         service = MBIM_SERVICE_MS_BASIC_CONNECT_EXTENSIONS;
         actions_enabled++;
     }
@@ -412,24 +437,16 @@ int main (int argc, char **argv)
 
     /* Setup option context, process it and destroy it */
     context = g_option_context_new ("- Control MBIM devices");
-    g_option_context_add_group (context,
-                                mbimcli_basic_connect_get_option_group ());
-    g_option_context_add_group (context,
-                                mbimcli_phonebook_get_option_group ());
-    g_option_context_add_group (context,
-                                mbimcli_dss_get_option_group ());
-    g_option_context_add_group (context,
-                                mbimcli_ms_firmware_id_get_option_group ());
-    g_option_context_add_group (context,
-                                mbimcli_ms_host_shutdown_get_option_group ());
-    g_option_context_add_group (context,
-                                mbimcli_ms_sar_get_option_group ());
-    g_option_context_add_group (context,
-                                mbimcli_atds_get_option_group ());
-    g_option_context_add_group (context,
-                                mbimcli_intel_firmware_update_get_option_group ());
-    g_option_context_add_group (context,
-                                mbimcli_ms_basic_connect_extensions_get_option_group ());
+    g_option_context_add_group (context, mbimcli_basic_connect_get_option_group ());
+    g_option_context_add_group (context, mbimcli_phonebook_get_option_group ());
+    g_option_context_add_group (context, mbimcli_dss_get_option_group ());
+    g_option_context_add_group (context, mbimcli_ms_firmware_id_get_option_group ());
+    g_option_context_add_group (context, mbimcli_ms_host_shutdown_get_option_group ());
+    g_option_context_add_group (context, mbimcli_ms_sar_get_option_group ());
+    g_option_context_add_group (context, mbimcli_atds_get_option_group ());
+    g_option_context_add_group (context, mbimcli_intel_firmware_update_get_option_group ());
+    g_option_context_add_group (context, mbimcli_ms_basic_connect_extensions_get_option_group ());
+    g_option_context_add_group (context, mbimcli_link_management_get_option_group ());
     g_option_context_add_main_entries (context, main_entries, NULL);
     if (!g_option_context_parse (context, &argc, &argv, &error)) {
         g_printerr ("error: %s\n", error->message);
