@@ -1370,6 +1370,99 @@ typedef enum { /*< since=1.26 >*/
     MBIM_TRANSMISSION_STATE_ACTIVE   = 1
 } MbimTransmissionState;
 
+/*****************************************************************************/
+/* 'Slot Info Status' enums */
+
+/**
+ * MbimUiccSlotState:
+ * @MBIM_UICC_SLOT_STATE_UNKNOWN: The modem is still in the process of initializing so the SIM slot state is not deterministic.
+ * @MBIM_UICC_SLOT_SATE_OFF_EMPTY: The UICC slot is powered off and no card is present.
+ * @MBIM_UICC_SLOT_STATE_OFF: The UICC slot is powered off.
+ * @MBIM_UICC_SLOT_STATE_EMPTY: The UICC slot is empty(there is no card in it).
+ * @MBIM_UICC_SLOT_STATE_NOT_READY: The UICC slot is occupied and powered on but the card within it is not yet ready.
+ * @MBIM_UICC_SLOT_STATE_ACTIVE: The UICC slot is occupied and the card within it is ready.
+ * @MBIM_UICC_SLOT_STATE_ERROR: The UICC slot is occupied and powreed on but the card is in an error state and cannot be used until it is next reset.
+ * @MBIM_UICC_SLOT_STATE_ACTIVE_ESIM: The card in the slot is an eSIM with an active profile and is ready to accept commands.
+ * @MBIM_UICC_SLOT_STATE_ACTIVE_ESIM_NO_PROFILES: The card in the slot is an eSIM with no profiles(or no active profiles) and is ready to accept commands.
+ *
+ * MbimUiccSlotState
+ *
+ * Since: 1.26
+ */
+typedef enum { /*< since=1.26 >*/
+    MBIM_UICC_SLOT_STATE_UNKNOWN = 0,
+    MBIM_UICC_SLOT_SATE_OFF_EMPTY = 1,
+    MBIM_UICC_SLOT_STATE_OFF = 2,
+    MBIM_UICC_SLOT_STATE_EMPTY = 3,
+    MBIM_UICC_SLOT_STATE_NOT_READY = 4,
+    MBIM_UICC_SLOT_STATE_ACTIVE = 5,
+    MBIM_UICC_SLOT_STATE_ERROR = 6,
+    MBIM_UICC_SLOT_STATE_ACTIVE_ESIM = 7,
+    MBIM_UICC_SLOT_STATE_ACTIVE_ESIM_NO_PROFILES = 8
+} MbimUiccSlotState;
+
+/*****************************************************************************/
+/* 'UICC APDU' enums */
+
+/**
+ * MbimUiccSecureMessaging:
+ * @MBIM_UICC_SECURE_MESSAGING_NONE: No secure messaging.
+ * @MBIM_UICC_SECURE_MESSAGING_NO_HDR_AUTH: Secure, command header not authenticated.
+ *
+ * Specifies whether apdu is exchanged using secure messaging.
+ *
+ * Since: 1.26
+ */
+typedef enum { /*< since=1.26 >*/
+    MBIM_UICC_SECURE_MESSAGING_NONE             = 0,
+    MBIM_UICC_SECURE_MESSAGING_NO_HDR_AUTH      = 1,
+} MbimUiccSecureMessaging;
+
+/**
+ * MbimUiccClassByteType:
+ * @MBIM_UICC_CLASS_BYTE_TYPE_INTER_INDUSTRY: Defined according to first interindustry definition in ISO 7816-4.
+ * @MBIM_UICC_CLASS_BYTE_TYPE_EXTENDED: Defined according to extended definition in ETSI 102 221.
+ *
+ * Specifies the type of class byte definition.
+ *
+ * Since: 1.26
+ */
+typedef enum { /*< since=1.26 >*/
+    MBIM_UICC_CLASS_BYTE_TYPE_INTER_INDUSTRY   = 0,
+    MBIM_UICC_CLASS_BYTE_TYPE_EXTENDED         = 1,
+} MbimUiccClassByteType;
+
+/* 'UICC Reset' enums */
+
+/**
+ * MbimUiccPassThroughAction:
+ * @MBIM_UICC_PASS_THROUGH_ACTION_DISABLE: Disable pass through.
+ * @MBIM_UICC_PASS_THROUGH_ACTION_ENABLE: Enable pass through.
+ *
+ * Pass through actions host can specify to modem. Upon reset
+ * treats UICC as if pass through or as a regular UICC
+ *
+ * Since: 1.26
+ */
+typedef enum { /*< since=1.26 >*/
+    MBIM_UICC_PASS_THROUGH_ACTION_DISABLE     = 0,
+    MBIM_UICC_PASS_THROUGH_ACTION_ENABLE      = 1,
+} MbimUiccPassThroughAction;
+
+/**
+ * MbimUiccPassThroughStatus:
+ * @MBIM_UICC_PASS_THROUGH_STATUS_DISABLED: Pass through disabled.
+ * @MBIM_UICC_PASS_THROUGH_STATUS_ENABLED: Pass through enabled.
+ *
+ * Pass through status of the modem specifies to the host.
+ *
+ * Since: 1.26
+ */
+typedef enum { /*< since=1.26 >*/
+    MBIM_UICC_PASS_THROUGH_STATUS_DISABLED   = 0,
+    MBIM_UICC_PASS_THROUGH_STATUS_ENABLED    = 1,
+} MbimUiccPassThroughStatus;
+
 G_END_DECLS
 
 #endif /* _LIBMBIM_GLIB_MBIM_ENUMS_H_ */

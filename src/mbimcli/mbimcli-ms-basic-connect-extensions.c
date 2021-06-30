@@ -45,7 +45,13 @@ static Context *ctx;
 /* Options */
 static gchar    *query_pco_str;
 static gboolean  query_lte_attach_configuration_flag;
-static gboolean  query_lte_attach_status_flag;
+static gboolean  query_lte_attach_status_flag; /* support for the deprecated name */
+static gboolean  query_lte_attach_info_flag;
+static gboolean  query_sys_caps_flag;
+static gboolean  query_device_caps_flag;
+static gchar    *query_slot_info_status_str;
+static gboolean  query_device_slot_mappings_flag;
+static gchar    *set_device_slot_mappings_str;
 
 static gboolean query_pco_arg_parse (const gchar  *option_name,
                                      const gchar  *value,
@@ -61,10 +67,36 @@ static GOptionEntry entries[] = {
       "Query LTE attach configuration",
       NULL
     },
-    { "ms-query-lte-attach-status", 0, 0, G_OPTION_ARG_NONE, &query_lte_attach_status_flag,
-      "Query LTE attach status",
+    { "ms-query-lte-attach-status", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &query_lte_attach_status_flag,
+      NULL,
       NULL
     },
+    { "ms-query-lte-attach-info", 0, 0, G_OPTION_ARG_NONE, &query_lte_attach_info_flag,
+      "Query LTE attach status information",
+      NULL
+    },
+    { "ms-query-sys-caps", 0, 0, G_OPTION_ARG_NONE, &query_sys_caps_flag,
+      "Query system capabilities",
+      NULL
+    },
+    { "ms-query-device-caps", 0,0, G_OPTION_ARG_NONE, &query_device_caps_flag,
+      "Query device capabilities",
+      NULL
+    },
+    { "ms-query-slot-info-status", 0, 0, G_OPTION_ARG_STRING, &query_slot_info_status_str,
+      "Query slot information status",
+      "[SlotIndex]"
+    },
+    { "ms-set-device-slot-mappings", 0, 0, G_OPTION_ARG_STRING, &set_device_slot_mappings_str,
+      "Set device slot mappings for each executor",
+      "[(SlotIndex)[,(SlotIndex)[,...]]]"
+
+    },
+    { "ms-query-device-slot-mappings", 0, 0, G_OPTION_ARG_NONE, &query_device_slot_mappings_flag,
+      "Query device slot mappings",
+      NULL
+    },
+
     { NULL }
 };
 
@@ -135,7 +167,12 @@ mbimcli_ms_basic_connect_extensions_options_enabled (void)
 
     n_actions = (!!query_pco_str +
                  query_lte_attach_configuration_flag +
-                 query_lte_attach_status_flag);
+                 (query_lte_attach_status_flag || query_lte_attach_info_flag) +
+                 query_sys_caps_flag +
+                 query_device_caps_flag +
+                 !!query_slot_info_status_str +
+                 !!set_device_slot_mappings_str +
+                 query_device_slot_mappings_flag);
 
     if (n_actions > 1) {
         g_printerr ("error: too many Microsoft Basic Connect Extensions Service actions requested\n");
@@ -257,12 +294,18 @@ query_lte_attach_configuration_ready (MbimDevice   *device,
 }
 
 static void
-query_lte_attach_status_ready (MbimDevice   *device,
-                               GAsyncResult *res)
+query_lte_attach_info_ready (MbimDevice   *device,
+                             GAsyncResult *res)
 {
-    g_autoptr(MbimMessage)         response = NULL;
-    g_autoptr(GError)              error = NULL;
-    g_autoptr(MbimLteAttachStatus) lte_attach_status = NULL;
+    g_autoptr(MbimMessage)  response = NULL;
+    g_autoptr(GError)       error = NULL;
+    guint32                 lte_attach_state;
+    guint32                 ip_type;
+    g_autofree gchar       *access_string = NULL;
+    g_autofree gchar       *user_name = NULL;
+    g_autofree gchar       *password = NULL;
+    guint32                 compression;
+    guint32                 auth_protocol;
 
     response = mbim_device_command_finish (device, res, &error);
     if (!response || !mbim_message_response_get_result (response, MBIM_MESSAGE_TYPE_COMMAND_DONE, &error)) {
@@ -271,12 +314,18 @@ query_lte_attach_status_ready (MbimDevice   *device,
         return;
     }
 
-    g_print ("[%s] Successfully queried LTE attach status\n",
+    g_print ("[%s] Successfully queried LTE attach info\n",
              mbim_device_get_path_display (device));
 
-    if (!mbim_message_ms_basic_connect_extensions_lte_attach_status_response_parse (
+    if (!mbim_message_ms_basic_connect_extensions_lte_attach_info_response_parse (
             response,
-            &lte_attach_status,
+            &lte_attach_state,
+            &ip_type,
+            &access_string,
+            &user_name,
+            &password,
+            &compression,
+            &auth_protocol,
             &error)) {
         g_printerr ("error: couldn't parse response message: %s\n", error->message);
         shutdown (FALSE);
@@ -284,14 +333,316 @@ query_lte_attach_status_ready (MbimDevice   *device,
     }
 
 #define VALIDATE_NA(str) (str ? str : "n/a")
-    g_print ("  Attach state:  %s\n", mbim_lte_attach_state_get_string (lte_attach_status->lte_attach_state));
-    g_print ("  IP type:       %s\n", mbim_context_ip_type_get_string (lte_attach_status->ip_type));
-    g_print ("  Access string: %s\n", VALIDATE_NA (lte_attach_status->access_string));
-    g_print ("  Username:      %s\n", VALIDATE_NA (lte_attach_status->user_name));
-    g_print ("  Password:      %s\n", VALIDATE_NA (lte_attach_status->password));
-    g_print ("  Compression:   %s\n", mbim_compression_get_string (lte_attach_status->compression));
-    g_print ("  Auth protocol: %s\n", mbim_auth_protocol_get_string (lte_attach_status->auth_protocol));
+    g_print ("  Attach state:  %s\n", mbim_lte_attach_state_get_string (lte_attach_state));
+    g_print ("  IP type:       %s\n", mbim_context_ip_type_get_string (ip_type));
+    g_print ("  Access string: %s\n", VALIDATE_NA (access_string));
+    g_print ("  Username:      %s\n", VALIDATE_NA (user_name));
+    g_print ("  Password:      %s\n", VALIDATE_NA (password));
+    g_print ("  Compression:   %s\n", mbim_compression_get_string (compression));
+    g_print ("  Auth protocol: %s\n", mbim_auth_protocol_get_string (auth_protocol));
 #undef VALIDATE_NA
+
+    shutdown (TRUE);
+}
+
+static void
+query_sys_caps_ready (MbimDevice   *device,
+                      GAsyncResult *res)
+{
+    g_autoptr(MbimMessage)  response = NULL;
+    g_autoptr(GError)       error = NULL;
+    guint32                 number_executors;
+    guint32                 number_slots;
+    guint32                 concurrency;
+    guint64                 modem_id;
+
+    response = mbim_device_command_finish (device, res, &error);
+    if (!response || !mbim_message_response_get_result (response, MBIM_MESSAGE_TYPE_COMMAND_DONE, &error)) {
+        g_printerr ("error: operation failed: %s\n", error->message);
+        shutdown (FALSE);
+        return;
+    }
+
+    g_print ("[%s] Successfully queried sys caps\n",
+             mbim_device_get_path_display (device));
+
+    if (!mbim_message_ms_basic_connect_extensions_sys_caps_response_parse (
+            response,
+            &number_executors,
+            &number_slots,
+            &concurrency,
+            &modem_id,
+            &error)) {
+        g_printerr ("error: couldn't parse response messages: %s\n", error->message);
+        shutdown (FALSE);
+        return;
+    }
+
+    g_print ("[%s] System capabilities retrieved:\n"
+             "\t Number of executors: '%u'\n"
+             "\t     Number of slots: '%u'\n"
+             "\t         Concurrency: '%u'\n"
+             "\t            Modem ID: '%" G_GUINT64_FORMAT "'\n",
+             mbim_device_get_path_display (device),
+             number_executors,
+             number_slots,
+             concurrency,
+             modem_id);
+
+    shutdown (TRUE);
+}
+
+static void
+query_device_caps_ready (MbimDevice   *device,
+                         GAsyncResult *res)
+{
+    g_autoptr(MbimMessage)  response = NULL;
+    g_autoptr(GError)       error = NULL;
+    MbimDeviceType          device_type;
+    const gchar            *device_type_str;
+    MbimVoiceClass          voice_class;
+    const gchar            *voice_class_str;
+    MbimCellularClass       cellular_class;
+    g_autofree gchar       *cellular_class_str = NULL;
+    MbimSimClass            sim_class;
+    g_autofree gchar       *sim_class_str = NULL;
+    MbimDataClass           data_class;
+    g_autofree gchar       *data_class_str = NULL;
+    MbimSmsCaps             sms_caps;
+    g_autofree gchar       *sms_caps_str = NULL;
+    MbimCtrlCaps            ctrl_caps;
+    g_autofree gchar       *ctrl_caps_str = NULL;
+    guint32                 max_sessions;
+    g_autofree gchar       *custom_data_class = NULL;
+    g_autofree gchar       *device_id = NULL;
+    g_autofree gchar       *firmware_info = NULL;
+    g_autofree gchar       *hardware_info = NULL;
+    guint32                 executor_index;
+
+    response = mbim_device_command_finish(device, res, &error);
+    if (!response || !mbim_message_response_get_result (response, MBIM_MESSAGE_TYPE_COMMAND_DONE, &error)) {
+        g_printerr ("error: operation failed: %s\n", error->message);
+        shutdown (FALSE);
+        return;
+    }
+
+    if (!mbim_message_ms_basic_connect_extensions_device_caps_response_parse (
+            response,
+            &device_type,
+            &cellular_class,
+            &voice_class,
+            &sim_class,
+            &data_class,
+            &sms_caps,
+            &ctrl_caps,
+            &max_sessions,
+            &custom_data_class,
+            &device_id,
+            &firmware_info,
+            &hardware_info,
+            &executor_index,
+            &error)) {
+        g_printerr ("error: couldn't parse response message: %s\n", error->message);
+        shutdown (FALSE);
+        return;
+    }
+
+    device_type_str    = mbim_device_type_get_string (device_type);
+    cellular_class_str = mbim_cellular_class_build_string_from_mask (cellular_class);
+    voice_class_str    = mbim_voice_class_get_string (voice_class);
+    sim_class_str      = mbim_sim_class_build_string_from_mask (sim_class);
+    data_class_str     = mbim_data_class_build_string_from_mask (data_class);
+    sms_caps_str       = mbim_sms_caps_build_string_from_mask (sms_caps);
+    ctrl_caps_str      = mbim_ctrl_caps_build_string_from_mask (ctrl_caps);
+
+    g_print ("[%s] Device capabilities retrieved:\n"
+             "\t      Device type: '%s'\n"
+             "\t   Cellular class: '%s'\n"
+             "\t      Voice class: '%s'\n"
+             "\t        SIM class: '%s'\n"
+             "\t       Data class: '%s'\n"
+             "\t         SMS caps: '%s'\n"
+             "\t        Ctrl caps: '%s'\n"
+             "\t     Max sessions: '%u'\n"
+             "\tCustom data class: '%s'\n"
+             "\t        Device ID: '%s'\n"
+             "\t    Firmware info: '%s'\n"
+             "\t    Hardware info: '%s'\n"
+             "\t   Executor Index: '%u'\n",
+             mbim_device_get_path_display (device),
+             VALIDATE_UNKNOWN (device_type_str),
+             VALIDATE_UNKNOWN (cellular_class_str),
+             VALIDATE_UNKNOWN (voice_class_str),
+             VALIDATE_UNKNOWN (sim_class_str),
+             VALIDATE_UNKNOWN (data_class_str),
+             VALIDATE_UNKNOWN (sms_caps_str),
+             VALIDATE_UNKNOWN (ctrl_caps_str),
+             max_sessions,
+             VALIDATE_UNKNOWN (custom_data_class),
+             VALIDATE_UNKNOWN (device_id),
+             VALIDATE_UNKNOWN (firmware_info),
+             VALIDATE_UNKNOWN (hardware_info),
+             executor_index);
+
+    shutdown (TRUE);
+}
+
+static gboolean
+query_slot_information_status_slot_index_parse (const gchar *str,
+                                                guint32     *slot_index,
+                                                GError      **error)
+{
+    gchar *endptr = NULL;
+    gint64 n;
+
+    g_assert (str != NULL);
+    g_assert (slot_index != NULL);
+
+    if (!str[0]) {
+        g_set_error (error,
+                     MBIM_CORE_ERROR,
+                     MBIM_CORE_ERROR_FAILED,
+                     "slot index not given");
+        return FALSE;
+    }
+
+    errno = 0;
+    n = g_ascii_strtoll (str, &endptr, 10);
+    if (errno || ((size_t)(endptr - str) < strlen (str))) {
+        g_set_error (error,
+                     MBIM_CORE_ERROR,
+                     MBIM_CORE_ERROR_FAILED,
+                     "couldn't parse slot index '%s'",
+                     str);
+        return FALSE;
+    }
+    *slot_index = (guint32) n;
+
+    return TRUE;
+}
+
+static void
+query_slot_information_status_ready (MbimDevice   *device,
+                                     GAsyncResult *res)
+{
+    g_autoptr(MbimMessage) response = NULL;
+    g_autoptr(GError)      error = NULL;
+    guint32                slot_index;
+    MbimUiccSlotState      slot_state;
+    const gchar           *slot_state_str;
+
+    response = mbim_device_command_finish (device, res, &error);
+    if (!response || !mbim_message_response_get_result (response, MBIM_MESSAGE_TYPE_COMMAND_DONE, &error)) {
+        g_printerr ("error: operation failed: %s\n", error->message);
+        shutdown (FALSE);
+        return;
+    }
+
+    if (!mbim_message_ms_basic_connect_extensions_slot_info_status_response_parse (
+                response,
+                &slot_index,
+                &slot_state,
+                &error)) {
+        g_printerr ("error: conldn't parse response message: %s\n", error->message);
+        shutdown (FALSE);
+        return;
+    }
+
+    slot_state_str = mbim_uicc_slot_state_get_string (slot_state);
+
+    g_print ("[%s] Slot info status retrieved:\n"
+             "\t        Slot '%u': '%s'\n",
+             mbim_device_get_path_display (device),
+             slot_index,
+             VALIDATE_UNKNOWN (slot_state_str));
+    shutdown (TRUE);
+}
+
+static gboolean
+set_device_slot_mappings_input_parse (const gchar *str,
+                                      GPtrArray   **slot_array,
+                                      GError      **error)
+{
+    g_auto(GStrv) split = NULL;
+    gchar        *endptr = NULL;
+    gint64        n;
+    MbimSlot     *slot_index;
+    guint32       i = 0;
+
+    g_assert (slot_array != NULL);
+
+    split = g_strsplit (str, ",", 0);
+
+    if (g_strv_length (split) < 1) {
+        g_set_error (error,
+                     MBIM_CORE_ERROR,
+                     MBIM_CORE_ERROR_FAILED,
+                     "missing arguments");
+        return FALSE;
+    }
+
+    *slot_array = g_ptr_array_new_with_free_func (g_free);
+
+    while (split[i] != NULL) {
+        errno = 0;
+        n = g_ascii_strtoll (split[i], &endptr, 10);
+        if (errno || n < 0 || n > G_MAXUINT32 || ((size_t)(endptr - split[i]) < strlen (split[i]))) {
+            g_set_error (error,
+                         MBIM_CORE_ERROR,
+                         MBIM_CORE_ERROR_FAILED,
+                         "couldn't parse device slot index '%s'",
+                         split[i]);
+            return FALSE;
+        }
+        slot_index = g_new (MbimSlot, 1);
+        slot_index->slot = (guint32) n;
+        g_ptr_array_add (*slot_array, slot_index);
+        i++;
+    }
+
+    return TRUE;
+}
+
+static void
+query_device_slot_mappings_ready (MbimDevice   *device,
+                                  GAsyncResult *res)
+{
+    g_autoptr(MbimMessage)   response = NULL;
+    g_autoptr(GError)        error = NULL;
+    guint32                  map_count = 0;
+    g_autoptr(MbimSlotArray) slot_mappings = NULL;
+    guint                    i;
+
+    response = mbim_device_command_finish (device, res, &error);
+    if (!response || !mbim_message_response_get_result (response, MBIM_MESSAGE_TYPE_COMMAND_DONE, &error)) {
+        g_printerr ("error: operation failed: %s\n", error->message);
+        shutdown (FALSE);
+        return;
+    }
+
+    if (!mbim_message_ms_basic_connect_extensions_device_slot_mappings_response_parse (
+            response,
+            &map_count,
+            &slot_mappings,
+            &error)) {
+        g_printerr ("error: couldn't parse response message: %s\n", error->message);
+        shutdown (FALSE);
+        return;
+    }
+
+    if (set_device_slot_mappings_str) {
+        g_print ("[%s] Updated slot mappings retrieved:\n",
+                 mbim_device_get_path_display (device));
+    } else {
+         g_print ("[%s] Slot mappings retrieved:\n",
+                  mbim_device_get_path_display (device));
+    }
+
+    for (i = 0; i < map_count; i++) {
+        g_print ("\t Executor '%u': slot '%u'\n",
+                 i,
+                 slot_mappings[i]->slot);
+    }
 
     shutdown (TRUE);
 }
@@ -346,15 +697,96 @@ mbimcli_ms_basic_connect_extensions_run (MbimDevice   *device,
         return;
     }
 
-    /* Request to query LTE attach status? */
-    if (query_lte_attach_status_flag) {
-        g_debug ("Asynchronously querying LTE attach status...");
-        request = mbim_message_ms_basic_connect_extensions_lte_attach_status_query_new (NULL);
+    /* Request to query LTE attach info? */
+    if (query_lte_attach_status_flag || query_lte_attach_info_flag) {
+        g_debug ("Asynchronously querying LTE attach info...");
+        request = mbim_message_ms_basic_connect_extensions_lte_attach_info_query_new (NULL);
         mbim_device_command (ctx->device,
                              request,
                              10,
                              ctx->cancellable,
-                             (GAsyncReadyCallback)query_lte_attach_status_ready,
+                             (GAsyncReadyCallback)query_lte_attach_info_ready,
+                             NULL);
+        return;
+    }
+
+    if (query_sys_caps_flag) {
+        g_debug ("Asynchronously querying system capabilities...");
+        request = mbim_message_ms_basic_connect_extensions_sys_caps_query_new (NULL);
+        mbim_device_command (ctx->device,
+                             request,
+                             10,
+                             ctx->cancellable,
+                             (GAsyncReadyCallback)query_sys_caps_ready,
+                             NULL);
+        return;
+    }
+
+    if (query_device_caps_flag) {
+        g_debug ("Asynchronously querying device capabilities...");
+        request = mbim_message_ms_basic_connect_extensions_device_caps_query_new (NULL);
+        mbim_device_command (ctx->device,
+                             request,
+                             10,
+                             ctx->cancellable,
+                             (GAsyncReadyCallback)query_device_caps_ready,
+                             NULL);
+        return;
+    }
+    
+    /*Request to query slot information status? */
+    if (query_slot_info_status_str) {
+        guint32 slot_index;
+
+        if (!query_slot_information_status_slot_index_parse (query_slot_info_status_str, &slot_index, &error)) {
+            g_printerr ("error: couldn't parse slot index: %s\n", error->message);
+            shutdown (FALSE);
+            return;
+        }
+
+        g_debug ("Asynchronously querying slot information status...");
+        request = mbim_message_ms_basic_connect_extensions_slot_info_status_query_new (slot_index, NULL);
+        mbim_device_command (ctx->device,
+                             request,
+                             10,
+                             ctx->cancellable,
+                             (GAsyncReadyCallback)query_slot_information_status_ready,
+                             NULL);
+        return;
+    }
+
+    /*Request to set device slot mappings */
+    if (set_device_slot_mappings_str) {
+        g_autoptr(GPtrArray) slot_array = NULL;
+
+        g_print ("Asynchronously set device slot mappings\n");
+        if (!set_device_slot_mappings_input_parse (set_device_slot_mappings_str, &slot_array, &error)) {
+            g_printerr ("error: couldn't parse setting argument: %s\n", error->message);
+            shutdown (FALSE);
+            return;
+        }
+
+        request = mbim_message_ms_basic_connect_extensions_device_slot_mappings_set_new (slot_array->len,
+                                                                                         (const MbimSlot **)slot_array->pdata,
+                                                                                         NULL);
+        mbim_device_command (ctx->device,
+                             request,
+                             10,
+                             ctx->cancellable,
+                             (GAsyncReadyCallback)query_device_slot_mappings_ready,
+                             NULL);
+        return;
+    }
+
+    /*Request to query device slot mappings? */
+    if (query_device_slot_mappings_flag) {
+        g_debug ("Asynchronously querying device slot mappings...");
+        request = mbim_message_ms_basic_connect_extensions_device_slot_mappings_query_new (NULL);
+        mbim_device_command (ctx->device,
+                             request,
+                             10,
+                             ctx->cancellable,
+                             (GAsyncReadyCallback)query_device_slot_mappings_ready,
                              NULL);
         return;
     }

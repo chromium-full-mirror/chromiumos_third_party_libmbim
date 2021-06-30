@@ -4,7 +4,7 @@ AC_PREREQ([2.68])
 dnl The libmbim version number
 m4_define([mbim_major_version], [1])
 m4_define([mbim_minor_version], [25])
-m4_define([mbim_micro_version], [3])
+m4_define([mbim_micro_version], [5])
 m4_define([mbim_version],
           [mbim_major_version.mbim_minor_version.mbim_micro_version])
 
@@ -89,9 +89,9 @@ AC_SUBST(MBIM_GLIB_LT_REVISION)
 AC_SUBST(MBIM_GLIB_LT_AGE)
 
 dnl Required dependency versions
-GLIB_MIN_VERSION=2.48
+GLIB_MIN_VERSION=2.56
 
-GLIB_BUILD_SYMBOLS="-DGLIB_VERSION_MIN_REQUIRED=GLIB_VERSION_2_48 -DGLIB_VERSION_MAX_ALLOWED=GLIB_VERSION_2_48 -DGLIB_DISABLE_DEPRECATION_WARNINGS"
+GLIB_BUILD_SYMBOLS="-DGLIB_VERSION_MIN_REQUIRED=GLIB_VERSION_2_56 -DGLIB_VERSION_MAX_ALLOWED=GLIB_VERSION_2_56 -DGLIB_DISABLE_DEPRECATION_WARNINGS"
 
 dnl General dependencies for common
 PKG_CHECK_MODULES(MBIM_COMMON,
