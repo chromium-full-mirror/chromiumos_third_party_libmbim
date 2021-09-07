@@ -1,21 +1,7 @@
 /* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/* SPDX-License-Identifier: LGPL-2.1-or-later */
 /*
  * libmbim-glib -- GLib/GIO based library to control MBIM devices
- *
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 2 of the License, or (at your option) any later version.
- *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, write to the
- * Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
- * Boston, MA 02110-1301 USA.
  *
  * Copyright (C) 2021 Aleksander Morgado <aleksander@aleksander.es>
  *
@@ -308,15 +294,13 @@ session_id_to_vlan_id (guint session_id)
 /*****************************************************************************/
 
 static NetlinkMessage *
-netlink_message_new_link (guint  session_id,
+netlink_message_new_link (guint  vlan_id,
                           gchar *ifname,
                           guint  base_if_index)
 {
     NetlinkMessage *msg;
     guint           linkinfo_pos, datainfo_pos;
     struct rtattr   info;
-
-    g_assert (session_id != MBIM_DEVICE_SESSION_ID_AUTOMATIC);
 
     msg = netlink_message_new (RTM_NEWLINK, NLM_F_CREATE | NLM_F_EXCL);
     append_netlink_attribute_uint32 (msg, IFLA_LINK, base_if_index);
@@ -330,7 +314,7 @@ netlink_message_new_link (guint  session_id,
     /* Store the position of the next attribute to adjust its length later. */
     datainfo_pos = get_pos_of_next_attr (msg);
     append_netlink_attribute_nested (msg, IFLA_INFO_DATA);
-    append_netlink_attribute_uint16 (msg, IFLA_VLAN_ID, session_id_to_vlan_id (session_id));
+    append_netlink_attribute_uint16 (msg, IFLA_VLAN_ID, vlan_id);
 
     /* Use memcpy to preserve byte alignment */
     memcpy (&info, (char *) msg->data + datainfo_pos, sizeof (struct rtattr));
@@ -412,7 +396,10 @@ get_first_free_session_id (MbimNetPortManager *self,
 {
     guint i;
 
-    for (i = MBIM_DEVICE_SESSION_ID_MIN; i <= MBIM_DEVICE_SESSION_ID_MAX; i++) {
+    /* The minimum session id is really 0 (MBIM_DEVICE_SESSION_ID_MIN), but
+     * when we have to automatically allocate a new session id we'll start at
+     * 1, because 0 is also used by the non-muxed setup. */
+    for (i = 1; i <= MBIM_DEVICE_SESSION_ID_MAX; i++) {
         g_autofree gchar *ifname = NULL;
 
         ifname = session_id_to_ifname (ifname_prefix, i);
@@ -429,6 +416,7 @@ get_first_free_session_id (MbimNetPortManager *self,
 
 typedef struct {
     guint  session_id;
+    guint  vlan_id;
     gchar *ifname;
 } AddLinkContext;
 
@@ -513,8 +501,10 @@ mbim_net_port_manager_add_link (MbimNetPortManager  *self,
     }
 
     ctx->ifname = session_id_to_ifname (ifname_prefix, ctx->session_id);
+    ctx->vlan_id = session_id_to_vlan_id (ctx->session_id);
+    g_debug ("Using ifname '%s' and vlan id %u", ctx->ifname, ctx->vlan_id);
 
-    msg = netlink_message_new_link (ctx->session_id, ctx->ifname, base_if_index);
+    msg = netlink_message_new_link (ctx->vlan_id, ctx->ifname, base_if_index);
 
     /* The task ownership is transferred to the transaction. */
     tr = transaction_new (self, msg, timeout, task);

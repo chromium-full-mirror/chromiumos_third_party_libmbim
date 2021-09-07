@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: GPL-2
+# SPDX-License-Identifier: GPL-2.0-or-later
 # Copyright (C) 2021 Iñigo Martinez <inigomartinez@gmail.com>
 
 mbimcli_sources = files(
@@ -32,7 +32,9 @@ mbimcli = executable(
   install: true,
 )
 
-install_data(
-  'mbimcli-completion',
-  install_dir: bash_completion_completionsdir,
-)
+if enable_bash_completion
+  install_data(
+    'mbimcli',
+    install_dir: bash_completion_completionsdir,
+  )
+endif

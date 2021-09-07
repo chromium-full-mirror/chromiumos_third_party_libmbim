@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: GPL-2
+# SPDX-License-Identifier: GPL-2.0-or-later
 # Copyright (C) 2021 Iñigo Martinez <inigomartinez@gmail.com>
 
 test_units = [
@@ -32,7 +32,7 @@ foreach test_unit: test_units
   )
 
   test(
-    test_unit[0],
+    test_unit,
     exe,
     env: test_env,
   )

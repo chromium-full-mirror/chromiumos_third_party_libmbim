@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: GPL-2
+# SPDX-License-Identifier: GPL-2.0-or-later
 # Copyright (C) 2021 Iñigo Martinez <inigomartinez@gmail.com>
 
 libmbim_glib_inc = include_directories('.')
@@ -47,8 +47,8 @@ sources = files(
 )
 
 deps = [
+  generated_dep,
   libmbim_common_dep,
-  libmbim_glib_generated_dep,
 ]
 
 libmbim_glib_core = static_library(
@@ -57,6 +57,7 @@ libmbim_glib_core = static_library(
   include_directories: top_inc,
   dependencies: deps + [gio_unix_dep],
   c_args: common_c_flags,
+  link_whole: libmbim_glib_generated,
 )
 
 libmbim_glib_core_dep = declare_dependency(
@@ -76,11 +77,12 @@ version_header = configure_file(
 
 symbol_map = join_paths(meson.current_source_dir(), 'symbol.map')
 
-libmbim_glib = shared_library(
+libmbim_glib = library(
   libname,
   version: mbim_glib_version,
   sources: version_header,
   include_directories: top_inc,
+  dependencies: generated_dep,
   link_args: '-Wl,--version-script,' + symbol_map,
   link_depends: symbol_map,
   link_whole: libmbim_glib_core,
@@ -106,7 +108,7 @@ pkg.generate(
 )
 
 # Introspection
-if enable_gir
+if enable_gir and get_option('default_library') != 'static'
   incs = [
     'Gio-2.0',
     'GLib-2.0',
