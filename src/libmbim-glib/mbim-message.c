@@ -16,6 +16,7 @@
 #include "mbim-message-private.h"
 #include "mbim-error-types.h"
 #include "mbim-enum-types.h"
+#include "mbim-tlv-private.h"
 
 #include "mbim-basic-connect.h"
 #include "mbim-auth.h"
@@ -151,6 +152,34 @@ _mbim_message_get_information_buffer_offset (const MbimMessage *self)
 }
 
 gboolean
+_mbim_message_read_guint16 (const MbimMessage  *self,
+                            guint32             relative_offset,
+                            guint16            *value,
+                            GError            **error)
+{
+    guint64 required_size;
+    guint32 information_buffer_offset;
+
+    g_assert (value);
+
+    information_buffer_offset = _mbim_message_get_information_buffer_offset (self);
+
+    required_size = (guint64)information_buffer_offset + (guint64)relative_offset + 2;
+    if ((guint64)self->len < required_size) {
+        g_set_error (error, MBIM_CORE_ERROR, MBIM_CORE_ERROR_INVALID_MESSAGE,
+                     "cannot read 16bit unsigned integer (2 bytes) (%u < %" G_GUINT64_FORMAT ")",
+                     self->len, required_size);
+        return FALSE;
+    }
+
+    *value = GUINT16_FROM_LE (G_STRUCT_MEMBER (
+                                  guint16,
+                                  self->data,
+                                  (information_buffer_offset + relative_offset)));
+    return TRUE;
+}
+
+gboolean
 _mbim_message_read_guint32 (const MbimMessage  *self,
                             guint32             relative_offset,
                             guint32            *value,
@@ -175,6 +204,34 @@ _mbim_message_read_guint32 (const MbimMessage  *self,
                                   guint32,
                                   self->data,
                                   (information_buffer_offset + relative_offset)));
+    return TRUE;
+}
+
+gboolean
+_mbim_message_read_gint32 (const MbimMessage  *self,
+                           guint32             relative_offset,
+                           gint32             *value,
+                           GError            **error)
+{
+    guint64 required_size;
+    guint32 information_buffer_offset;
+
+    g_assert (value);
+
+    information_buffer_offset = _mbim_message_get_information_buffer_offset (self);
+
+    required_size = (guint64)information_buffer_offset + (guint64)relative_offset + 4;
+    if ((guint64)self->len < required_size) {
+        g_set_error (error, MBIM_CORE_ERROR, MBIM_CORE_ERROR_INVALID_MESSAGE,
+                     "cannot read 32bit signed integer (4 bytes) (%u < %" G_GUINT64_FORMAT ")",
+                     self->len, required_size);
+        return FALSE;
+    }
+
+    *value = GINT32_FROM_LE (G_STRUCT_MEMBER (
+                                 gint32,
+                                 self->data,
+                                 (information_buffer_offset + relative_offset)));
     return TRUE;
 }
 
@@ -757,6 +814,151 @@ _mbim_message_read_ipv6_array (const MbimMessage  *self,
     return TRUE;
 }
 
+gboolean
+_mbim_message_read_tlv (const MbimMessage  *self,
+                        guint32             relative_offset,
+                        MbimTlv           **tlv,
+                        guint32            *bytes_read,
+                        GError            **error)
+{
+    guint32       information_buffer_offset;
+    guint64       tlv_offset;
+    guint64       required_size;
+    const guint8 *tlv_raw;
+    guint64       tlv_size;
+
+    information_buffer_offset = _mbim_message_get_information_buffer_offset (self);
+    tlv_offset = (guint64)information_buffer_offset + (guint64)relative_offset;
+    tlv_raw = (const guint8 *) G_STRUCT_MEMBER_P (self->data, tlv_offset);
+    tlv_size = ((guint64)sizeof (struct tlv) +
+                (guint64)GUINT32_FROM_LE (((struct tlv *)tlv_raw)->data_length) +
+                (guint64)((struct tlv *)tlv_raw)->padding_length);
+
+    required_size = tlv_offset + tlv_size;
+    if ((guint64)self->len < required_size) {
+        g_set_error (error, MBIM_CORE_ERROR, MBIM_CORE_ERROR_INVALID_MESSAGE,
+                     "cannot read TLV (%" G_GUINT64_FORMAT " bytes) (%u < %" G_GUINT64_FORMAT ")",
+                     tlv_size, self->len, required_size);
+        return FALSE;
+    }
+
+    *tlv = _mbim_tlv_new_from_raw (tlv_raw, (guint32)tlv_size, bytes_read, error);
+    return (*tlv) ? TRUE : FALSE;
+}
+
+gboolean
+_mbim_message_read_tlv_string (const MbimMessage  *self,
+                               guint32             relative_offset,
+                               gchar             **str,
+                               guint32            *bytes_read,
+                               GError            **error)
+{
+    g_autoptr(MbimTlv)  tlv = NULL;
+    guint32             tlv_bytes_read = 0;
+    gchar              *tlv_str;
+
+    if (!_mbim_message_read_tlv (self,
+                                 relative_offset,
+                                 &tlv,
+                                 &tlv_bytes_read,
+                                 error))
+        return FALSE;
+
+    tlv_str = mbim_tlv_string_get (tlv, error);
+    if (!tlv_str)
+        return FALSE;
+
+    *str = tlv_str;
+    *bytes_read = tlv_bytes_read;
+    return TRUE;
+}
+
+gboolean
+_mbim_message_read_tlv_guint16_array (const MbimMessage  *self,
+                                      guint32             relative_offset,
+                                      guint32            *array_size,
+                                      guint16           **array,
+                                      guint32            *bytes_read,
+                                      GError            **error)
+{
+    g_autoptr(MbimTlv) tlv = NULL;
+    guint32            tlv_bytes_read = 0;
+
+    if (!_mbim_message_read_tlv (self,
+                                 relative_offset,
+                                 &tlv,
+                                 &tlv_bytes_read,
+                                 error))
+        return FALSE;
+
+    if (!mbim_tlv_guint16_array_get (tlv, array_size, array, error))
+        return FALSE;
+
+    *bytes_read = tlv_bytes_read;
+    return TRUE;
+}
+
+gboolean
+_mbim_message_read_tlv_list (const MbimMessage  *self,
+                             guint32             relative_offset,
+                             GList             **tlv_list,
+                             guint32            *bytes_read,
+                             GError            **error)
+{
+    guint32       information_buffer_offset;
+    guint64       tlv_list_offset;
+    const guint8 *tlv_list_raw;
+    guint32       tlv_list_raw_size;
+    GList        *list = NULL;
+    guint32       total_bytes_read = 0;
+    GError       *inner_error = NULL;
+
+    information_buffer_offset = _mbim_message_get_information_buffer_offset (self);
+    tlv_list_offset = (guint64)information_buffer_offset + (guint64)relative_offset;
+
+    /* TLV list always at the end of the message */
+    if ((guint64)self->len < tlv_list_offset) {
+        g_set_error (error, MBIM_CORE_ERROR, MBIM_CORE_ERROR_INVALID_MESSAGE,
+                     "cannot read TLV at offset (%u < %" G_GUINT64_FORMAT ")",
+                     self->len, tlv_list_offset);
+        return FALSE;
+    }
+
+    tlv_list_raw_size = self->len - (guint32)tlv_list_offset;
+    tlv_list_raw = (const guint8 *) G_STRUCT_MEMBER_P (self->data, tlv_list_offset);
+
+    while ((tlv_list_raw_size > 0) && !inner_error) {
+        MbimTlv *tlv;
+        guint32  tlv_size;
+
+        if (tlv_list_raw_size < sizeof (struct tlv)) {
+            g_warning ("Left %u bytes unused after the TLV list", tlv_list_raw_size);
+            break;
+        }
+
+        tlv = _mbim_tlv_new_from_raw (tlv_list_raw, tlv_list_raw_size, &tlv_size, &inner_error);
+        if (!tlv)
+            break;
+
+        list = g_list_append (list, tlv);
+        total_bytes_read += tlv_size;
+
+        g_assert (tlv_list_raw_size >= tlv_size);
+        tlv_list_raw += tlv_size;
+        tlv_list_raw_size -= tlv_size;
+    }
+
+    if (inner_error) {
+        g_propagate_error (error, inner_error);
+        g_list_free_full (list, (GDestroyNotify)mbim_tlv_unref);
+        return FALSE;
+    }
+
+    *bytes_read = total_bytes_read;
+    *tlv_list = list;
+    return TRUE;
+}
+
 /*****************************************************************************/
 /* Struct builder interface
  *
@@ -913,6 +1115,17 @@ _mbim_struct_builder_append_uuid (MbimStructBuilder *builder,
 }
 
 void
+_mbim_struct_builder_append_guint16 (MbimStructBuilder *builder,
+                                     guint16            value)
+{
+    guint16 tmp;
+
+    /* guint16 values are added in the static buffer only */
+    tmp = GUINT16_TO_LE (value);
+    g_byte_array_append (builder->fixed_buffer, (guint8 *)&tmp, sizeof (tmp));
+}
+
+void
 _mbim_struct_builder_append_guint32 (MbimStructBuilder *builder,
                                      guint32            value)
 {
@@ -920,6 +1133,17 @@ _mbim_struct_builder_append_guint32 (MbimStructBuilder *builder,
 
     /* guint32 values are added in the static buffer only */
     tmp = GUINT32_TO_LE (value);
+    g_byte_array_append (builder->fixed_buffer, (guint8 *)&tmp, sizeof (tmp));
+}
+
+void
+_mbim_struct_builder_append_gint32 (MbimStructBuilder *builder,
+                                    gint32             value)
+{
+    gint32 tmp;
+
+    /* gint32 values are added in the static buffer only */
+    tmp = GINT32_TO_LE (value);
     g_byte_array_append (builder->fixed_buffer, (guint8 *)&tmp, sizeof (tmp));
 }
 
@@ -1011,6 +1235,61 @@ _mbim_struct_builder_append_string (MbimStructBuilder *builder,
         g_byte_array_append (builder->variable_buffer, (const guint8 *)utf16, (guint)utf16_bytes);
         bytearray_apply_padding (builder->variable_buffer, &utf16_bytes);
     }
+}
+
+void
+_mbim_struct_builder_append_string_tlv (MbimStructBuilder *builder,
+                                        const gchar       *value)
+{
+    guint8 reserved = 0;
+    guint8 padding = 0;
+    guint32 length;
+    gunichar2 *utf16 = NULL;
+    guint32 utf16_bytes = 0;
+    GError *error = NULL;
+
+    /* Add the reserved value */
+    g_byte_array_append (builder->fixed_buffer, (guint8 *)&reserved, sizeof (reserved));
+
+    /* Convert the string from UTF-8 to UTF-16HE */
+    if (value && value[0]) {
+        glong items_written = 0;
+        utf16 = g_utf8_to_utf16 (value,
+                                 -1,
+                                 NULL, /* bytes */
+                                 &items_written, /* gunichar2 */
+                                 &error);
+
+        if (!utf16) {
+            g_warning ("Error converting string: %s", error->message);
+            g_error_free (error);
+            return;
+        }
+        utf16_bytes = items_written * 2;
+
+        /* Add the padding value */
+        padding = utf16_bytes % 4;
+        g_byte_array_append (builder->fixed_buffer, (guint8 *)&padding, sizeof (padding));
+        g_debug ("padding:%d", padding);
+    }
+
+    /* Add the length value */
+    length = GUINT32_TO_LE (utf16_bytes);
+    g_byte_array_append (builder->fixed_buffer, (guint8 *)&length, sizeof (length));
+
+    /* And finally, the string itself to the variable buffer */
+    if (utf16_bytes) {
+        /* For BE systems, convert from BE to LE */
+        if (G_BYTE_ORDER == G_BIG_ENDIAN) {
+            guint i;
+
+            for (i = 0; i < (utf16_bytes / 2); i++)
+                utf16[i] = GUINT16_TO_LE (utf16[i]);
+        }
+        g_byte_array_append (builder->variable_buffer, (const guint8 *)utf16, (guint)utf16_bytes);
+        bytearray_apply_padding (builder->variable_buffer, &utf16_bytes);
+    }
+    g_free (utf16);
 }
 
 void
@@ -1172,6 +1451,13 @@ _mbim_message_command_builder_append_guint32 (MbimMessageCommandBuilder *builder
 }
 
 void
+_mbim_message_command_builder_append_guint16 (MbimMessageCommandBuilder *builder,
+                                              guint16                    value)
+{
+    _mbim_struct_builder_append_guint16 (builder->contents_builder, value);
+}
+
+void
 _mbim_message_command_builder_append_guint32_array (MbimMessageCommandBuilder *builder,
                                                     const guint32             *values,
                                                     guint32                    n_values)
@@ -1231,6 +1517,47 @@ _mbim_message_command_builder_append_ipv6_array (MbimMessageCommandBuilder *buil
                                                  guint32                    n_values)
 {
     _mbim_struct_builder_append_ipv6_array (builder->contents_builder, values, n_values);
+}
+
+/*****************************************************************************/
+/* TLVs only expected as primary message fields, not inside structs */
+
+void
+_mbim_message_command_builder_append_tlv (MbimMessageCommandBuilder *builder,
+                                          const MbimTlv             *tlv)
+{
+    const guint8 *raw_tlv;
+    guint32       raw_tlv_size;
+
+    raw_tlv = mbim_tlv_get_raw (tlv, &raw_tlv_size, NULL);
+    _mbim_struct_builder_append_byte_array (builder->contents_builder,
+                                            FALSE, FALSE, FALSE,
+                                            raw_tlv, raw_tlv_size,
+                                            FALSE);
+}
+
+void
+_mbim_message_command_builder_append_tlv_string (MbimMessageCommandBuilder *builder,
+                                                 const gchar               *str)
+{
+    g_autoptr(MbimTlv) tlv = NULL;
+    g_autoptr(GError)  error = NULL;
+
+    tlv = mbim_tlv_string_new (str, &error);
+    if (!tlv)
+        g_warning ("Error appending TLV: %s", error->message);
+    else
+        _mbim_message_command_builder_append_tlv (builder, tlv);
+}
+
+void
+_mbim_message_command_builder_append_tlv_list (MbimMessageCommandBuilder *builder,
+                                               const GList               *tlvs)
+{
+    const GList *l;
+
+    for (l = tlvs; l; l = g_list_next (l))
+        _mbim_message_command_builder_append_tlv (builder, (MbimTlv *)(l->data));
 }
 
 /*****************************************************************************/
@@ -1332,11 +1659,37 @@ mbim_message_get_printable (const MbimMessage *self,
                             const gchar       *line_prefix,
                             gboolean           headers_only)
 {
-    GString *printable;
-    MbimService service_read_fields = MBIM_SERVICE_INVALID;
+    gchar *str;
 
     g_return_val_if_fail (self != NULL, NULL);
     g_return_val_if_fail (line_prefix != NULL, NULL);
+
+    str = mbim_message_get_printable_full (self, 1, 0, line_prefix, headers_only, NULL);
+    g_assert (str);
+
+    return str;
+}
+
+gchar *
+mbim_message_get_printable_full (const MbimMessage  *self,
+                                 guint8              mbimex_version_major,
+                                 guint8              mbimex_version_minor,
+                                 const gchar        *line_prefix,
+                                 gboolean            headers_only,
+                                 GError            **error)
+{
+    GString     *printable = NULL;
+    MbimService  service_read_fields = MBIM_SERVICE_INVALID;
+
+    g_return_val_if_fail (self != NULL, NULL);
+    g_return_val_if_fail (line_prefix != NULL, NULL);
+
+    if (mbimex_version_major > 3) {
+        g_set_error (error, MBIM_CORE_ERROR, MBIM_CORE_ERROR_INVALID_ARGS,
+                     "MBIMEx version %x.%02x is unsupported",
+                     mbimex_version_major, mbimex_version_minor);
+        return NULL;
+    }
 
     if (!line_prefix)
         line_prefix = "";
@@ -1398,14 +1751,14 @@ mbim_message_get_printable (const MbimMessage *self,
     case MBIM_MESSAGE_TYPE_HOST_ERROR:
     case MBIM_MESSAGE_TYPE_FUNCTION_ERROR:
         if (!headers_only) {
-            MbimProtocolError error;
+            MbimProtocolError protocol_error;
 
-            error = mbim_message_error_get_error_status_code (self);
+            protocol_error = mbim_message_error_get_error_status_code (self);
             g_string_append_printf (printable,
                                     "%sContents:\n"
                                     "%s  error = '%s' (0x%08x)\n",
                                     line_prefix,
-                                    line_prefix, mbim_protocol_error_get_string (error), error);
+                                    line_prefix, mbim_protocol_error_get_string (protocol_error), protocol_error);
         }
         break;
 
@@ -1502,59 +1855,103 @@ mbim_message_get_printable (const MbimMessage *self,
 
     if (service_read_fields != MBIM_SERVICE_INVALID) {
         g_autofree gchar  *fields_printable = NULL;
-        g_autoptr(GError)  error = NULL;
+        g_autoptr(GError)  inner_error = NULL;
 
         switch (service_read_fields) {
         case MBIM_SERVICE_BASIC_CONNECT:
-            fields_printable = __mbim_message_basic_connect_get_printable_fields (self, line_prefix, &error);
+            if (mbimex_version_major < 2)
+                fields_printable = __mbim_message_basic_connect_get_printable_fields (self, line_prefix, &inner_error);
+            else if (mbimex_version_major == 2) {
+                fields_printable = __mbim_message_ms_basic_connect_v2_get_printable_fields (self, line_prefix, &inner_error);
+                /* attempt fallback to v1 printable */
+                if (g_error_matches (inner_error, MBIM_CORE_ERROR, MBIM_CORE_ERROR_UNSUPPORTED)) {
+                    g_clear_error (&inner_error);
+                    fields_printable = __mbim_message_basic_connect_get_printable_fields (self, line_prefix, &inner_error);
+                }
+            } else if (mbimex_version_major == 3) {
+                fields_printable = __mbim_message_ms_basic_connect_v3_get_printable_fields (self, line_prefix, &inner_error);
+                /* attempt fallback to v2 printable */
+                if (g_error_matches (inner_error, MBIM_CORE_ERROR, MBIM_CORE_ERROR_UNSUPPORTED)) {
+                    g_clear_error (&inner_error);
+                    fields_printable = __mbim_message_ms_basic_connect_v2_get_printable_fields (self, line_prefix, &inner_error);
+                    /* attempt fallback to v1 printable */
+                    if (g_error_matches (inner_error, MBIM_CORE_ERROR, MBIM_CORE_ERROR_UNSUPPORTED)) {
+                        g_clear_error (&inner_error);
+                        fields_printable = __mbim_message_basic_connect_get_printable_fields (self, line_prefix, &inner_error);
+                    }
+                }
+            } else
+                g_assert_not_reached ();
             break;
         case MBIM_SERVICE_SMS:
-            fields_printable = __mbim_message_sms_get_printable_fields (self, line_prefix, &error);
+            fields_printable = __mbim_message_sms_get_printable_fields (self, line_prefix, &inner_error);
             break;
         case MBIM_SERVICE_USSD:
-            fields_printable = __mbim_message_ussd_get_printable_fields (self, line_prefix, &error);
+            fields_printable = __mbim_message_ussd_get_printable_fields (self, line_prefix, &inner_error);
             break;
         case MBIM_SERVICE_PHONEBOOK:
-            fields_printable = __mbim_message_phonebook_get_printable_fields (self, line_prefix, &error);
+            fields_printable = __mbim_message_phonebook_get_printable_fields (self, line_prefix, &inner_error);
             break;
         case MBIM_SERVICE_STK:
-            fields_printable = __mbim_message_stk_get_printable_fields (self, line_prefix, &error);
+            fields_printable = __mbim_message_stk_get_printable_fields (self, line_prefix, &inner_error);
             break;
         case MBIM_SERVICE_AUTH:
-            fields_printable = __mbim_message_auth_get_printable_fields (self, line_prefix, &error);
+            fields_printable = __mbim_message_auth_get_printable_fields (self, line_prefix, &inner_error);
             break;
         case MBIM_SERVICE_DSS:
-            fields_printable = __mbim_message_dss_get_printable_fields (self, line_prefix, &error);
+            fields_printable = __mbim_message_dss_get_printable_fields (self, line_prefix, &inner_error);
             break;
         case MBIM_SERVICE_MS_FIRMWARE_ID:
-            fields_printable = __mbim_message_ms_firmware_id_get_printable_fields (self, line_prefix, &error);
+            fields_printable = __mbim_message_ms_firmware_id_get_printable_fields (self, line_prefix, &inner_error);
             break;
         case MBIM_SERVICE_MS_HOST_SHUTDOWN:
-            fields_printable = __mbim_message_ms_host_shutdown_get_printable_fields (self, line_prefix, &error);
+            fields_printable = __mbim_message_ms_host_shutdown_get_printable_fields (self, line_prefix, &inner_error);
             break;
         case MBIM_SERVICE_MS_SAR:
-            fields_printable = __mbim_message_ms_sar_get_printable_fields (self, line_prefix, &error);
+            fields_printable = __mbim_message_ms_sar_get_printable_fields (self, line_prefix, &inner_error);
             break;
         case MBIM_SERVICE_PROXY_CONTROL:
-            fields_printable = __mbim_message_proxy_control_get_printable_fields (self, line_prefix, &error);
+            fields_printable = __mbim_message_proxy_control_get_printable_fields (self, line_prefix, &inner_error);
             break;
         case MBIM_SERVICE_QMI:
-            fields_printable = __mbim_message_qmi_get_printable_fields (self, line_prefix, &error);
+            fields_printable = __mbim_message_qmi_get_printable_fields (self, line_prefix, &inner_error);
             break;
         case MBIM_SERVICE_ATDS:
-            fields_printable = __mbim_message_atds_get_printable_fields (self, line_prefix, &error);
+            fields_printable = __mbim_message_atds_get_printable_fields (self, line_prefix, &inner_error);
             break;
         case MBIM_SERVICE_INTEL_FIRMWARE_UPDATE:
-            fields_printable = __mbim_message_intel_firmware_update_get_printable_fields (self, line_prefix, &error);
+            fields_printable = __mbim_message_intel_firmware_update_get_printable_fields (self, line_prefix, &inner_error);
             break;
         case MBIM_SERVICE_QDU:
-            fields_printable = __mbim_message_qdu_get_printable_fields (self, line_prefix, &error);
+            fields_printable = __mbim_message_qdu_get_printable_fields (self, line_prefix, &inner_error);
             break;
         case MBIM_SERVICE_MS_BASIC_CONNECT_EXTENSIONS:
-            fields_printable = __mbim_message_ms_basic_connect_extensions_get_printable_fields (self, line_prefix, &error);
+            if (mbimex_version_major < 2)
+                fields_printable = __mbim_message_ms_basic_connect_extensions_get_printable_fields (self, line_prefix, &inner_error);
+            else if (mbimex_version_major == 2) {
+                fields_printable = __mbim_message_ms_basic_connect_extensions_v2_get_printable_fields (self, line_prefix, &inner_error);
+                /* attempt fallback to v1 printable */
+                if (g_error_matches (inner_error, MBIM_CORE_ERROR, MBIM_CORE_ERROR_UNSUPPORTED)) {
+                    g_clear_error (&inner_error);
+                    fields_printable = __mbim_message_ms_basic_connect_extensions_get_printable_fields (self, line_prefix, &inner_error);
+                }
+            } else if (mbimex_version_major == 3) {
+                fields_printable = __mbim_message_ms_basic_connect_extensions_v3_get_printable_fields (self, line_prefix, &inner_error);
+                /* attempt fallback to v2 printable */
+                if (g_error_matches (inner_error, MBIM_CORE_ERROR, MBIM_CORE_ERROR_UNSUPPORTED)) {
+                    g_clear_error (&inner_error);
+                    fields_printable = __mbim_message_ms_basic_connect_extensions_v2_get_printable_fields (self, line_prefix, &inner_error);
+                    /* attempt fallback to v1 printable */
+                    if (g_error_matches (inner_error, MBIM_CORE_ERROR, MBIM_CORE_ERROR_UNSUPPORTED)) {
+                        g_clear_error (&inner_error);
+                        fields_printable = __mbim_message_ms_basic_connect_extensions_get_printable_fields (self, line_prefix, &inner_error);
+                    }
+                }
+             } else
+               g_assert_not_reached ();
             break;
         case MBIM_SERVICE_MS_UICC_LOW_LEVEL_ACCESS:
-            fields_printable = __mbim_message_ms_uicc_low_level_access_get_printable_fields (self, line_prefix, &error);
+            fields_printable = __mbim_message_ms_uicc_low_level_access_get_printable_fields (self, line_prefix, &inner_error);
             break;
         case MBIM_SERVICE_INVALID:
         case MBIM_SERVICE_LAST:
@@ -1563,10 +1960,10 @@ mbim_message_get_printable (const MbimMessage *self,
             break;
         }
 
-        if (error)
+        if (inner_error)
             g_string_append_printf (printable,
                                     "%sFields: %s\n",
-                                    line_prefix, error->message);
+                                    line_prefix, inner_error->message);
         else if (fields_printable && fields_printable[0])
             g_string_append_printf (printable,
                                     "%sFields:\n"
