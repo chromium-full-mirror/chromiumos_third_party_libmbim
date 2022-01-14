@@ -6,6 +6,7 @@
 
   // *********************************************************************************
   { "name"     : "Device Caps",
+    "service"  : "Basic Connect",
     "type"     : "Command",
     "since"    : "1.0",
     "query"    : [],
@@ -47,6 +48,7 @@
 
   // *********************************************************************************
   { "name"         : "Subscriber Ready Status",
+    "service"      : "Basic Connect",
     "type"         : "Command",
     "since-ex"     : { "query"        : "1.0",
                        "response"     : "1.0",
@@ -85,6 +87,7 @@
 
   // *********************************************************************************
   { "name"         : "Radio State",
+    "service"      : "Basic Connect",
     "type"         : "Command",
     "since"        : "1.0",
     "set"          : [ { "name"          : "RadioState",
@@ -106,6 +109,7 @@
 
   // *********************************************************************************
   { "name"     : "Pin",
+    "service"  : "Basic Connect",
     "type"     : "Command",
     "since"    : "1.0",
     "set"      : [ { "name"          : "PinType",
@@ -144,6 +148,7 @@
                      "format" : "guint32" } ] },
 
   { "name"     : "Pin List",
+    "service"  : "Basic Connect",
     "type"     : "Command",
     "since"    : "1.0",
     "query"    : [],
@@ -198,6 +203,7 @@
                      "format" : "guint32" } ] },
 
   { "name"     : "Home Provider",
+    "service"  : "Basic Connect",
     "type"     : "Command",
     "since"    : "1.2",
     "set"      : [ { "name"        : "Provider",
@@ -210,6 +216,7 @@
 
   // *********************************************************************************
   { "name"         : "Preferred Providers",
+    "service"      : "Basic Connect",
     "type"         : "Command",
     "since-ex"     : { "set"          : "1.2",
                        "query"        : "1.2",
@@ -237,6 +244,7 @@
 
   // *********************************************************************************
   { "name"       : "Visible Providers",
+    "service"    : "Basic Connect",
     "type"       : "Command",
     "since"      : "1.2",
     "query"      : [ { "name" : "Action",
@@ -251,6 +259,7 @@
 
   // *********************************************************************************
   { "name"         : "Register State",
+    "service"      : "Basic Connect",
     "type"         : "Command",
     "since"        : "1.0",
     "set"          : [ { "name"   : "ProviderId",
@@ -313,6 +322,7 @@
 
   // *********************************************************************************
   { "name"         : "Signal State",
+    "service"      : "Basic Connect",
     "type"         : "Command",
     "since"        : "1.0",
     "set"          : [ { "name"   : "SignalStrengthInterval",
@@ -346,6 +356,7 @@
 
   // *********************************************************************************
   { "name"         : "Packet Service",
+    "service"      : "Basic Connect",
     "type"         : "Command",
     "since"        : "1.0",
     "set"          : [ { "name"          : "PacketServiceAction",
@@ -379,6 +390,7 @@
 
   // *********************************************************************************
   { "name"         : "Connect",
+    "service"      : "Basic Connect",
     "type"         : "Command",
     "since"        : "1.0",
     "set"          : [ { "name"   : "SessionId",
@@ -471,6 +483,7 @@
                      "public-format" : "MbimAuthProtocol" } ] },
 
   { "name"         : "Provisioned Contexts",
+    "service"      : "Basic Connect",
     "type"         : "Command",
     "since"        : "1.0",
     "set"          : [ { "name"   : "ContextId",
@@ -508,6 +521,7 @@
   // *********************************************************************************
 
   { "name"     : "Service Activation",
+    "service"  : "Basic Connect",
     "type"     : "Command",
     "since"    : "1.2",
     "set"      : [ { "name"   : "Buffer",
@@ -536,6 +550,7 @@
                      "format" : "ipv6" } ] },
 
   { "name"         : "IP Configuration",
+    "service"      : "Basic Connect",
     "type"         : "Command",
     "since"        : "1.0",
     "query"        : [ { "name"   : "SessionId",
@@ -670,6 +685,7 @@
                      "array-size-field" : "CidsCount" } ] },
 
   { "name"     : "Device Services",
+    "service"  : "Basic Connect",
     "type"     : "Command",
     "since"    : "1.0",
     "query"    : [],
@@ -695,6 +711,7 @@
                      "array-size-field" : "CidsCount" } ] },
 
   { "name"     : "Device Service Subscribe List",
+    "service"  : "Basic Connect",
     "type"     : "Command",
     "since"    : "1.8",
     "set"      : [ { "name"   : "EventsCount",
@@ -712,6 +729,7 @@
 
   // *********************************************************************************
   { "name"     : "Packet Statistics",
+    "service"  : "Basic Connect",
     "type"     : "Command",
     "since"    : "1.4",
     "query"    : [],
@@ -734,6 +752,7 @@
 
   // *********************************************************************************
   { "name"     : "Network Idle Hint",
+    "service"  : "Basic Connect",
     "type"     : "Command",
     "since"    : "1.4",
     "query"    : [],
@@ -746,6 +765,7 @@
 
   // *********************************************************************************
   { "name"         : "Emergency Mode",
+    "service"      : "Basic Connect",
     "type"         : "Command",
     "since-ex"     : { "set"          : "1.4",
                        "query"        : "1.4",
@@ -776,6 +796,7 @@
                      "array-size-field" : "FilterSize" } ] },
 
   { "name"     : "IP Packet Filters",
+    "service"  : "Basic Connect",
     "type"     : "Command",
     "since"    : "1.4",
     "query"    : [ { "name"   : "SessionId",
@@ -805,6 +826,7 @@
 
   // *********************************************************************************
   { "name"         : "Multicarrier Providers",
+    "service"      : "Basic Connect",
     "type"         : "Command",
     "since-ex"     : { "set"          : "1.4",
                        "query"        : "1.4",

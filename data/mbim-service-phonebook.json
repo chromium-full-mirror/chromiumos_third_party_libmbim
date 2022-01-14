@@ -6,6 +6,7 @@
 
   // *********************************************************************************
   { "name"         : "Configuration",
+    "service"      : "Phonebook",
     "type"         : "Command",
     "since"        : "1.4",
     "query"        : [],
@@ -44,6 +45,7 @@
                      "format" : "string" } ] },
 
   { "name"     : "Read",
+    "service"  : "Phonebook",
     "type"     : "Command",
     "since"    : "1.4",
     "query"    : [ { "name"          : "FilterFlag",
@@ -60,6 +62,7 @@
 
   // *********************************************************************************
   { "name"     : "Delete",
+    "service"  : "Phonebook",
     "type"     : "Command",
     "since"    : "1.4",
     "set"      : [ { "name"          : "FilterFlag",
@@ -72,6 +75,7 @@
 
   // *********************************************************************************
   { "name"     : "Write",
+    "service"  : "Phonebook",
     "type"     : "Command",
     "since"    : "1.4",
     "set"      : [ { "name"          : "SaveFlag",

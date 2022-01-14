@@ -3,17 +3,16 @@
 
 project(
   'libmbim', 'c',
-  version: '1.27.2',
+  version: '1.27.0',
   license: ['GPL-2.0-or-later', 'LGPL-2.1-or-later'],
   default_options: [
     'buildtype=debugoptimized',
     'c_std=gnu89',
     'warning_level=2',
   ],
-  meson_version: '>= 0.53.0',
+  meson_version: '>= 0.45.1',
 )
 
-mbim_name = meson.project_name()
 mbim_version = meson.project_version()
 version_array = mbim_version.split('.')
 mbim_major_version = version_array[0].to_int()
@@ -27,8 +26,8 @@ mbim_includedir = get_option('includedir')
 mbim_libexecdir = get_option('libexecdir')
 mbim_mandir = get_option('mandir')
 
-mbim_glib_include_subdir = mbim_name + '-glib'
-mbim_glib_pkgincludedir = mbim_includedir / mbim_glib_include_subdir
+mbim_glib_include_subdir = meson.project_name() + '-glib'
+mbim_glib_pkgincludedir = join_paths(mbim_includedir, mbim_glib_include_subdir)
 
 # libtool versioning for libmbim-glib (-version-info c:r:a)
 # - If the interface is unchanged, but the implementation has changed or been fixed, then increment r
@@ -45,15 +44,15 @@ mbim_gir_version = '1.0'
 gnome = import('gnome')
 i18n = import('i18n')
 pkg = import('pkgconfig')
-python = import('python').find_installation('python3')
+python = import('python3').find_python()
 
 source_root = meson.current_source_dir()
 
-data_dir = source_root / 'data'
-templates_dir = source_root / 'build-aux/templates'
+data_dir = join_paths(source_root, 'data')
+templates_dir = join_paths(source_root, 'build-aux/templates')
 
-mbim_codegen = find_program(source_root / 'build-aux/mbim-codegen/mbim-codegen')
-mbim_mkenums = find_program(source_root / 'build-aux/mbim-mkenums')
+mbim_codegen = find_program(join_paths(source_root, 'build-aux/mbim-codegen/mbim-codegen'))
+mbim_mkenums = find_program(join_paths(source_root, 'build-aux/mbim-mkenums'))
 
 top_inc = include_directories('.')
 
@@ -150,6 +149,8 @@ if enable_bash_completion
   )
 endif
 
+glib_prefix = glib_dep.get_pkgconfig_variable('prefix')
+
 # MBIM username
 mbim_username = get_option('mbim_username')
 enable_mbim_username = (mbim_username != '')
@@ -167,14 +168,16 @@ endif
 config_h.set('MBIM_USERNAME_ENABLED', enable_mbim_username)
 
 # introspection support
-enable_gir = dependency('gobject-introspection-1.0', version: '>= 0.9.6', required: get_option('introspection')).found()
+enable_gir = get_option('introspection')
+if enable_gir
+  dependency('gobject-introspection-1.0', version: '>= 0.9.6')
+endif
 
-version_conf = {
-  'MBIM_MAJOR_VERSION': mbim_major_version,
-  'MBIM_MINOR_VERSION': mbim_minor_version,
-  'MBIM_MICRO_VERSION': mbim_micro_version,
-  'VERSION': mbim_version,
-}
+version_conf = configuration_data()
+version_conf.set('MBIM_MAJOR_VERSION', mbim_major_version)
+version_conf.set('MBIM_MINOR_VERSION', mbim_minor_version)
+version_conf.set('MBIM_MICRO_VERSION', mbim_micro_version)
+version_conf.set('VERSION', mbim_version)
 
 subdir('src')
 subdir('utils')
@@ -184,33 +187,31 @@ if enable_gtk_doc
   subdir('docs/reference/libmbim-glib')
 endif
 
-help2man = find_program(
-  'help2man',
-# When meson >= 0.59 is popular enough, replace with
-# required: get_option('man').require(meson.can_run_host_binaries())
-  required: get_option('man'),
-)
-subdir('docs/man', if_found: help2man)
+help2man = find_program('help2man', required: false)
+if help2man.found()
+  subdir('docs/man')
+endif
 
 configure_file(
   output: 'config.h',
   configuration: config_h,
 )
 
-summary({
-  'compiler': cc.get_id(),
-  'cflags': cc_flags,
-  'Documentation': enable_gtk_doc,
-  'bash completion': enable_bash_completion,
-  'gobject introspection': enable_gir,
-  'man pages': help2man.found(),
-}, section: 'Build')
+meson.add_install_script(
+  'meson_post_install.py',
+  get_option('bindir'),
+)
 
-summary({
-  'prefix': mbim_prefix,
-  'udev base directory': (enable_mbim_username ? udev_udevdir : 'disabled'),
-}, section: 'System paths')
-
-summary({
-  'MBIM username': mbim_username,
-}, section: 'Features')
+output = '\n' + meson.project_name() + ' ' + meson.project_version() + '\n\n'
+output += '  Build\n'
+output += '    compiler:              ' + cc.get_id() + '\n'
+output += '    cflags:                ' + ' '.join(cc_flags) + '\n'
+output += '    Documentation:         ' + enable_gtk_doc.to_string() + '\n'
+output += '    bash completion:       ' + enable_bash_completion.to_string() + '\n'
+output += '    gobject introspection: ' + enable_gir.to_string() + '\n\n'
+output += '  System paths\n'
+output += '    prefix:                ' + mbim_prefix + '\n'
+output += '    udev base directory:   ' + mbim_username + '\n\n'
+output += '  Features\n'
+output += '    MBIM username:         ' + mbim_username
+message(output)

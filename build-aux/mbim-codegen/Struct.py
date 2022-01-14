@@ -26,19 +26,12 @@ class Struct:
         # Whether the struct is used as a single field, or as an array of
         # fields. Will be updated after having created the object.
         self.single_member = False
-        self.ms_struct = False
-        self.ref_struct_array_member = False
-        self.struct_array_member = False
-        self.ms_struct_array_member = False
+        self.array_member = False
 
         # Check whether the struct is composed of fixed-sized fields
         self.size = 0
         for field in self.contents:
-            if field['format'] == 'guint16':
-                self.size += 2
-            elif field['format'] == 'guint32':
-                self.size += 4
-            elif field['format'] == 'gint32':
+            if field['format'] == 'guint32':
                 self.size += 4
             elif field['format'] == 'guint64':
                 self.size += 8
@@ -75,36 +68,15 @@ class Struct:
                 if 'array-size-field' not in field:
                     inner_template += (' * @${field_name_underscore}_size: size of the ${field_name_underscore} array.\n')
                 inner_template += (' * @${field_name_underscore}: an array of #guint8 values.\n')
-            elif field['format'] == 'guint16':
-                if 'public-format' in field:
-                    translations['public'] = field['public-format']
-                    inner_template = (
-                        ' * @${field_name_underscore}: a ${public} given as a #guint16.\n')
-                else:
-                    inner_template = (
-                        ' * @${field_name_underscore}: a #guint16.\n')
             elif field['format'] == 'guint32':
-                if 'public-format' in field:
-                    translations['public'] = field['public-format']
-                    inner_template = (
-                        ' * @${field_name_underscore}: a ${public} given as a #guint32.\n')
-                else:
-                    inner_template = (
-                        ' * @${field_name_underscore}: a #guint32.\n')
-            elif field['format'] == 'gint32':
                 inner_template = (
-                    ' * @${field_name_underscore}: a #gint32.\n')
+                    ' * @${field_name_underscore}: a #guint32.\n')
             elif field['format'] == 'guint32-array':
                 inner_template = (
                     ' * @${field_name_underscore}: an array of #guint32 values.\n')
             elif field['format'] == 'guint64':
-                if 'public-format' in field:
-                    translations['public'] = field['public-format']
-                    inner_template = (
-                        ' * @${field_name_underscore}: a ${public} given as a #guint64.\n')
-                else:
-                    inner_template = (
-                        ' * @${field_name_underscore}: a #guint64.\n')
+                inner_template = (
+                    ' * @${field_name_underscore}: a #guint64.\n')
             elif field['format'] == 'string':
                 inner_template = (
                     ' * @${field_name_underscore}: a string.\n')
@@ -148,15 +120,9 @@ class Struct:
                         '    guint32 ${field_name_underscore}_size;\n')
                 inner_template += (
                     '    guint8 *${field_name_underscore};\n')
-            elif field['format'] == 'guint16':
-                inner_template = (
-                    '    guint16 ${field_name_underscore};\n')
             elif field['format'] == 'guint32':
                 inner_template = (
                     '    guint32 ${field_name_underscore};\n')
-            elif field['format'] == 'gint32':
-                inner_template = (
-                    '    gint32 ${field_name_underscore};\n')
             elif field['format'] == 'guint32-array':
                 inner_template = (
                     '    guint32 *${field_name_underscore};\n')
@@ -231,11 +197,7 @@ class Struct:
             elif field['format'] in ['unsized-byte-array', 'ref-byte-array', 'ref-byte-array-no-offset']:
                 inner_template += (
                     '    g_free (var->${field_name_underscore});\n')
-            elif field['format'] == 'guint16':
-                pass
             elif field['format'] == 'guint32':
-                pass
-            elif field['format'] == 'gint32':
                 pass
             elif field['format'] == 'guint32-array':
                 inner_template += (
@@ -275,7 +237,7 @@ class Struct:
                 '}\n')
             cfile.write(string.Template(template).substitute(translations))
 
-        if self.struct_array_member == True or self.ref_struct_array_member == True or self.ms_struct_array_member == True:
+        if self.array_member:
             # TypeArray was introduced in 1.24
             translations['array_since'] = self.since if utils.version_compare('1.24', self.since) > 0 else '1.24'
             template = (
@@ -337,11 +299,8 @@ class Struct:
             '\n')
 
         for field in self.contents:
-            translations['field_name']              = field['name']
-            translations['field_name_underscore']   = utils.build_underscore_name_from_camelcase(field['name'])
-            translations['public']                  = field['public-format'] if 'public-format' in field else field['format']
-            translations['public_underscore']       = utils.build_underscore_name_from_camelcase(field['public-format']) if 'public-format' in field else ''
-            translations['public_underscore_upper'] = utils.build_underscore_name_from_camelcase(field['public-format']).upper() if 'public-format' in field else ''
+            translations['field_name'] = field['name']
+            translations['field_name_underscore'] = utils.build_underscore_name_from_camelcase(field['name'])
 
             inner_template = (
                 '    g_string_append_printf (str, "%s  ${field_name} = ", line_prefix);\n'
@@ -379,34 +338,14 @@ class Struct:
                     '            g_string_append_printf (str, "%02x%s", self->${field_name_underscore}[i], (i == (array_size - 1)) ? "" : ":" );\n'
                     '        g_string_append (str, "\'");\n')
 
-            elif field['format'] in ['guint16', 'guint32', 'guint64']:
-                if 'public-format' in field:
-                    inner_template += (
-                        '#if defined __${public_underscore_upper}_IS_ENUM__\n'
-                        '        g_string_append_printf (str, "\'%s\'", ${public_underscore}_get_string ((${public})self->${field_name_underscore}));\n'
-                        '#elif defined __${public_underscore_upper}_IS_FLAGS__\n'
-                        '        {\n'
-                        '            g_autofree gchar *tmpstr = NULL;\n'
-                        '\n'
-                        '            tmpstr = ${public_underscore}_build_string_from_mask ((${public})self->${field_name_underscore});\n'
-                        '            g_string_append_printf (str, "\'%s\'", tmpstr);\n'
-                        '        }\n'
-                        '#else\n'
-                        '# error neither enum nor flags\n'
-                        '#endif\n'
-                        '\n')
-                elif field['format'] == 'guint16':
-                    inner_template += (
-                        '        g_string_append_printf (str, "\'%" G_GUINT16_FORMAT "\'", self->${field_name_underscore});\n')
-                elif field['format'] == 'guint32':
-                    inner_template += (
-                        '        g_string_append_printf (str, "\'%" G_GUINT32_FORMAT "\'", self->${field_name_underscore});\n')
-                elif field['format'] == 'guint64':
-                    inner_template += (
-                        '        g_string_append_printf (str, "\'%" G_GUINT64_FORMAT "\'", self->${field_name_underscore});\n')
-            elif field['format'] == 'gint32':
-                    inner_template += (
-                        '        g_string_append_printf (str, "\'%" G_GINT32_FORMAT "\'", self->${field_name_underscore});\n')
+            elif field['format'] == 'guint32':
+                inner_template += (
+                    '        g_string_append_printf (str, "\'%" G_GUINT32_FORMAT "\'", self->${field_name_underscore});\n')
+
+            elif field['format'] == 'guint64':
+                inner_template += (
+                    '        g_string_append_printf (str, "\'%" G_GUINT64_FORMAT "\'", self->${field_name_underscore});\n')
+
             elif field['format'] == 'guint32-array':
                 translations['array_size_field_name_underscore'] = utils.build_underscore_name_from_camelcase(field['array-size-field'])
                 inner_template += (
@@ -489,9 +428,7 @@ class Struct:
             '\n'
             '    g_assert (self != NULL);\n'
             '\n'
-            '    out = g_new0 (${name}, 1);\n'
-            '\n')
-
+            '    out = g_new0 (${name}, 1);\n')
 
         for field in self.contents:
             translations['field_name_underscore'] = utils.build_underscore_name_from_camelcase(field['name'])
@@ -559,22 +496,10 @@ class Struct:
                     '        memcpy (out->${field_name_underscore}, tmp, ${array_size});\n'
                     '        offset += ${array_size};\n'
                     '    }\n')
-            elif field['format'] == 'guint16':
-                inner_template += (
-                    '\n'
-                    '    if (!_mbim_message_read_guint16 (self, offset, &out->${field_name_underscore}, error))\n'
-                    '        goto out;\n'
-                    '    offset += 2;\n')
             elif field['format'] == 'guint32':
                 inner_template += (
                     '\n'
                     '    if (!_mbim_message_read_guint32 (self, offset, &out->${field_name_underscore}, error))\n'
-                    '        goto out;\n'
-                    '    offset += 4;\n')
-            elif field['format'] == 'gint32':
-                inner_template += (
-                    '\n'
-                    '    if (!_mbim_message_read_gint32 (self, offset, &out->${field_name_underscore}, error))\n'
                     '        goto out;\n'
                     '    offset += 4;\n')
             elif field['format'] == 'guint32-array':
@@ -679,44 +604,7 @@ class Struct:
             '}\n')
         cfile.write(string.Template(template).substitute(translations))
 
-        if self.ms_struct == True:
-            template = (
-                '\n'
-                'static gboolean\n'
-                '_mbim_message_read_${name_underscore}_ms_struct (\n'
-                '    const MbimMessage *self,\n'
-                '    guint32 relative_offset,\n'
-                '    ${name} **out_struct,\n'
-                '    GError **error)\n'
-                '{\n'
-                '    ${name} *out;\n'
-                '    guint32 offset;\n'
-                '    guint32 size;\n'
-                '\n'
-                '    g_assert (self != NULL);\n'
-                '\n'
-                '    if (!_mbim_message_read_guint32 (self, relative_offset, &offset, error))\n'
-                '        return FALSE;\n'
-                '    relative_offset += 4;\n'
-                '\n'
-                '    if (!_mbim_message_read_guint32 (self, relative_offset, &size, error))\n'
-                '        return FALSE;\n'
-                '    relative_offset += 4;\n'
-                '\n'
-                '    if (!offset) {\n'
-                '        *out_struct = NULL;\n'
-                '        return TRUE;\n'
-                '    }\n'
-                '\n'
-                '    out = _mbim_message_read_${name_underscore}_struct (self, offset, NULL, error);\n'
-                '    if (!out)\n'
-                '        return FALSE;\n'
-                '    *out_struct = out;\n'
-                '    return TRUE;\n'
-                '}\n')
-            cfile.write(string.Template(template).substitute(translations))
-
-        if self.struct_array_member == True:
+        if self.array_member:
             template = (
                 '\n'
                 'static gboolean\n'
@@ -724,6 +612,7 @@ class Struct:
                 '    const MbimMessage *self,\n'
                 '    guint32 array_size,\n'
                 '    guint32 relative_offset_array_start,\n'
+                '    gboolean refs,\n'
                 '    ${name}Array **out_array,\n'
                 '    GError **error)\n'
                 '{\n'
@@ -739,50 +628,18 @@ class Struct:
                 '\n'
                 '    out = g_new0 (${name} *, array_size + 1);\n'
                 '\n'
-                '    _mbim_message_read_guint32 (self, relative_offset_array_start, &offset, &inner_error);\n'
-                '    for (i = 0; !inner_error && (i < array_size); i++, offset += ${struct_size})\n'
-                '        out[i] = _mbim_message_read_${name_underscore}_struct (self, offset, NULL, &inner_error);\n'
+                '    if (!refs) {\n'
+                '        _mbim_message_read_guint32 (self, relative_offset_array_start, &offset, &inner_error);\n'
+                '        for (i = 0; !inner_error && (i < array_size); i++, offset += ${struct_size})\n'
+                '            out[i] = _mbim_message_read_${name_underscore}_struct (self, offset, NULL, &inner_error);\n'
+                '    } else {\n'
+                '        offset = relative_offset_array_start;\n'
+                '        for (i = 0; !inner_error && (i < array_size); i++, offset += 8) {\n'
+                '            guint32 tmp_offset;\n'
                 '\n'
-                '    if (!inner_error) {\n'
-                '        *out_array = out;\n'
-                '        return TRUE;\n'
-                '    }\n'
-                '\n'
-                '    ${name_underscore}_array_free (out);\n'
-                '    g_propagate_error (error, inner_error);\n'
-                '    return FALSE;\n'
-                '}\n')
-            cfile.write(string.Template(template).substitute(translations))
-
-        if self.ref_struct_array_member == True:
-            template = (
-                '\n'
-                'static gboolean\n'
-                '_mbim_message_read_${name_underscore}_ref_struct_array (\n'
-                '    const MbimMessage *self,\n'
-                '    guint32 array_size,\n'
-                '    guint32 relative_offset_array_start,\n'
-                '    ${name}Array **out_array,\n'
-                '    GError **error)\n'
-                '{\n'
-                '    GError *inner_error = NULL;\n'
-                '    ${name}Array *out;\n'
-                '    guint32 i;\n'
-                '    guint32 offset;\n'
-                '\n'
-                '    if (!array_size) {\n'
-                '        *out_array = NULL;\n'
-                '        return TRUE;\n'
-                '    }\n'
-                '\n'
-                '    out = g_new0 (${name} *, array_size + 1);\n'
-                '\n'
-                '    offset = relative_offset_array_start;\n'
-                '    for (i = 0; !inner_error && (i < array_size); i++, offset += 8) {\n'
-                '        guint32 tmp_offset;\n'
-                '\n'
-                '        if (_mbim_message_read_guint32 (self, offset, &tmp_offset, &inner_error))\n'
-                '            out[i] = _mbim_message_read_${name_underscore}_struct (self, tmp_offset, NULL, &inner_error);\n'
+                '            if (_mbim_message_read_guint32 (self, offset, &tmp_offset, &inner_error))\n'
+                '                out[i] = _mbim_message_read_${name_underscore}_struct (self, tmp_offset, NULL, &inner_error);\n'
+                '        }\n'
                 '    }\n'
                 '\n'
                 '    if (!inner_error) {\n'
@@ -796,66 +653,6 @@ class Struct:
                 '}\n')
             cfile.write(string.Template(template).substitute(translations))
 
-        if self.ms_struct_array_member == True:
-            template = (
-                '\n'
-                'static gboolean\n'
-                '_mbim_message_read_${name_underscore}_ms_struct_array (\n'
-                '    const MbimMessage *self,\n'
-                '    guint32 offset,\n'
-                '    guint32 *out_array_size,\n'
-                '    ${name}Array **out_array,\n'
-                '    GError **error)\n'
-                '{\n'
-                '    GError *inner_error = NULL;\n'
-                '    ${name}Array *out;\n'
-                '    guint32 i;\n'
-                '    guint32 intermediate_struct_offset;\n'
-                '    guint32 intermediate_struct_size;\n'
-                '    guint32 array_size;\n'
-                '\n'
-                '    if (!_mbim_message_read_guint32 (self, offset, &intermediate_struct_offset, error))\n'
-                '        return FALSE;\n'
-                '    offset += 4;\n'
-                '\n'
-                '    if (!_mbim_message_read_guint32 (self, offset, &intermediate_struct_size, error))\n'
-                '        return FALSE;\n'
-                '    offset += 4;\n'
-                '\n'
-                '    if (!intermediate_struct_offset) {\n'
-                '        *out_array_size = 0;\n'
-                '        *out_array = NULL;\n'
-                '        return TRUE;\n'
-                '    }\n'
-                '\n'
-                '    if (!_mbim_message_read_guint32 (self, intermediate_struct_offset, &array_size, error))\n'
-                '        return FALSE;\n'
-                '\n'
-                '    if (!array_size) {\n'
-                '        *out_array_size = 0;\n'
-                '        *out_array = NULL;\n'
-                '        return TRUE;\n'
-                '    }\n'
-                '\n'
-                '    intermediate_struct_offset += 4;\n'
-                '\n'
-                '    out = g_new0 (${name} *, array_size + 1);\n'
-                '\n'
-                '    for (i = 0; !inner_error && (i < array_size); i++, intermediate_struct_offset += ${struct_size}) {\n'
-                '        out[i] = _mbim_message_read_${name_underscore}_struct (self, intermediate_struct_offset, NULL, &inner_error);\n'
-                '    }\n'
-                '\n'
-                '    if (!inner_error) {\n'
-                '        *out_array_size = array_size;\n'
-                '        *out_array = out;\n'
-                '        return TRUE;\n'
-                '    }\n'
-                '\n'
-                '    ${name_underscore}_array_free (out);\n'
-                '    g_propagate_error (error, inner_error);\n'
-                '    return FALSE;\n'
-                '}\n')
-            cfile.write(string.Template(template).substitute(translations))
 
     """
     Emit the type's append methods
@@ -894,12 +691,8 @@ class Struct:
                     inner_template = ('    _mbim_struct_builder_append_byte_array (builder, ${has_offset}, FALSE, ${pad_array}, value->${field}, value->${array_size_field}, FALSE);\n')
                 else:
                     inner_template = ('    _mbim_struct_builder_append_byte_array (builder, ${has_offset}, TRUE, ${pad_array}, value->${field}, value->${field}_size, FALSE);\n')
-            elif field['format'] == 'guint16':
-                inner_template = ('    _mbim_struct_builder_append_guint16 (builder, value->${field});\n')
             elif field['format'] == 'guint32':
                 inner_template = ('    _mbim_struct_builder_append_guint32 (builder, value->${field});\n')
-            elif field['format'] == 'gint32':
-                inner_template = ('    _mbim_struct_builder_append_gint32 (builder, value->${field});\n')
             elif field['format'] == 'guint32-array':
                 inner_template = ('    _mbim_struct_builder_append_guint32_array (builder, value->${field}, value->${array_size_field});\n')
             elif field['format'] == 'guint64':
@@ -950,112 +743,93 @@ class Struct:
             '}\n')
         cfile.write(string.Template(template).substitute(translations))
 
-        if self.struct_array_member == True:
-            template = (
-                '\n'
-                'static void\n'
-                '_mbim_struct_builder_append_${name_underscore}_struct_array (\n'
-                '    MbimStructBuilder *builder,\n'
-                '    const ${name} *const *values,\n'
-                '    guint32 n_values)\n'
-                '{\n'
-                '    guint32 offset;\n'
-                '    guint32 i;\n'
-                '    GByteArray *raw_all = NULL;\n'
-                '\n'
-                '    for (i = 0; i < n_values; i++) {\n'
-                '        GByteArray *raw;\n'
-                '\n'
-                '        raw = _${name_underscore}_struct_new (values[i]);\n'
-                '        if (!raw_all)\n'
-                '            raw_all = raw;\n'
-                '        else {\n'
-                '            g_byte_array_append (raw_all, raw->data, raw->len);\n'
-                '            g_byte_array_unref (raw);\n'
-                '        }\n'
-                '    }\n'
-                '\n'
-                '    if (!raw_all) {\n'
-                '        offset = 0;\n'
-                '        g_byte_array_append (builder->fixed_buffer, (guint8 *)&offset, sizeof (offset));\n'
-                '    } else {\n'
-                '        guint32 offset_offset;\n'
-                '\n'
-                '        /* Offset of the offset */\n'
-                '        offset_offset = builder->fixed_buffer->len;\n'
-                '        /* Length *not* in LE yet */\n'
-                '        offset = builder->variable_buffer->len;\n'
-                '        /* Add the offset value */\n'
-                '        g_byte_array_append (builder->fixed_buffer, (guint8 *)&offset, sizeof (offset));\n'
-                '        /* Configure the value to get updated */\n'
-                '        g_array_append_val (builder->offsets, offset_offset);\n'
-                '        /* Add the final array itself */\n'
-                '        g_byte_array_append (builder->variable_buffer, raw_all->data, raw_all->len);\n'
-                '        g_byte_array_unref (raw_all);\n'
-                '    }\n'
-                '}\n'
-                '\n'
-                'static void\n'
-                '_mbim_message_command_builder_append_${name_underscore}_struct_array (\n'
-                '    MbimMessageCommandBuilder *builder,\n'
-                '    const ${name} *const *values,\n'
-                '    guint32 n_values)\n'
-                '{\n'
-                '    _mbim_struct_builder_append_${name_underscore}_struct_array (builder->contents_builder, values, n_values);\n'
-                '}\n')
-            cfile.write(string.Template(template).substitute(translations))
+        template = (
+            '\n'
+            'static void\n'
+            '_mbim_struct_builder_append_${name_underscore}_struct_array (\n'
+            '    MbimStructBuilder *builder,\n'
+            '    const ${name} *const *values,\n'
+            '    guint32 n_values,\n'
+            '    gboolean refs)\n'
+            '{\n'
+            '    guint32 offset;\n'
+            '    guint32 i;\n'
+            '    GByteArray *raw_all = NULL;\n'
+            '\n'
+            '    if (!refs) {\n'
+            '        for (i = 0; i < n_values; i++) {\n'
+            '            GByteArray *raw;\n'
+            '\n'
+            '            raw = _${name_underscore}_struct_new (values[i]);\n'
+            '            if (!raw_all)\n'
+            '                raw_all = raw;\n'
+            '            else {\n'
+            '                g_byte_array_append (raw_all, raw->data, raw->len);\n'
+            '                g_byte_array_unref (raw);\n'
+            '            }\n'
+            '        }\n'
+            '\n'
+            '        if (!raw_all) {\n'
+            '            offset = 0;\n'
+            '            g_byte_array_append (builder->fixed_buffer, (guint8 *)&offset, sizeof (offset));\n'
+            '        } else {\n'
+            '            guint32 offset_offset;\n'
+            '\n'
+            '            /* Offset of the offset */\n'
+            '            offset_offset = builder->fixed_buffer->len;\n'
+            '            /* Length *not* in LE yet */\n'
+            '            offset = builder->variable_buffer->len;\n'
+            '            /* Add the offset value */\n'
+            '            g_byte_array_append (builder->fixed_buffer, (guint8 *)&offset, sizeof (offset));\n'
+            '            /* Configure the value to get updated */\n'
+            '            g_array_append_val (builder->offsets, offset_offset);\n'
+            '            /* Add the final array itself */\n'
+            '            g_byte_array_append (builder->variable_buffer, raw_all->data, raw_all->len);\n'
+            '            g_byte_array_unref (raw_all);\n'
+            '        }\n'
+            '    } else {\n'
+            '        for (i = 0; i < n_values; i++) {\n'
+            '            guint32 length;\n'
+            '            guint32 offset_offset;\n'
+            '            GByteArray *raw;\n'
+            '\n'
+            '            raw = _${name_underscore}_struct_new (values[i]);\n'
+            '            g_assert (raw->len > 0);\n'
+            '\n'
+            '            /* Offset of the offset */\n'
+            '            offset_offset = builder->fixed_buffer->len;\n'
+            '\n'
+            '            /* Length *not* in LE yet */\n'
+            '            offset = builder->variable_buffer->len;\n'
+            '            /* Add the offset value */\n'
+            '            g_byte_array_append (builder->fixed_buffer, (guint8 *)&offset, sizeof (offset));\n'
+            '            /* Configure the value to get updated */\n'
+            '            g_array_append_val (builder->offsets, offset_offset);\n'
+            '\n'
+            '            /* Add the length value */\n'
+            '            length = GUINT32_TO_LE (raw->len);\n'
+            '            g_byte_array_append (builder->fixed_buffer, (guint8 *)&length, sizeof (length));\n'
+            '\n'
+            '            /* And finally, the bytearray itself to the variable buffer */\n'
+            '            g_byte_array_append (builder->variable_buffer, (const guint8 *)raw->data, (guint)raw->len);\n'
+            '            g_byte_array_unref (raw);\n'
+            '        }\n'
+            '    }\n'
+            '}\n')
+        cfile.write(string.Template(template).substitute(translations))
 
-        if self.ref_struct_array_member == True:
-            template = (
-                '\n'
-                'static void\n'
-                '_mbim_struct_builder_append_${name_underscore}_ref_struct_array (\n'
-                '    MbimStructBuilder *builder,\n'
-                '    const ${name} *const *values,\n'
-                '    guint32 n_values)\n'
-                '{\n'
-                '    guint32 offset;\n'
-                '    guint32 i;\n'
-                '\n'
-                '    for (i = 0; i < n_values; i++) {\n'
-                '        guint32 length;\n'
-                '        guint32 offset_offset;\n'
-                '        GByteArray *raw;\n'
-                '\n'
-                '        raw = _${name_underscore}_struct_new (values[i]);\n'
-                '        g_assert (raw->len > 0);\n'
-                '\n'
-                '        /* Offset of the offset */\n'
-                '        offset_offset = builder->fixed_buffer->len;\n'
-                '\n'
-                '        /* Length *not* in LE yet */\n'
-                '        offset = builder->variable_buffer->len;\n'
-                '        /* Add the offset value */\n'
-                '        g_byte_array_append (builder->fixed_buffer, (guint8 *)&offset, sizeof (offset));\n'
-                '        /* Configure the value to get updated */\n'
-                '        g_array_append_val (builder->offsets, offset_offset);\n'
-                '\n'
-                '        /* Add the length value */\n'
-                '        length = GUINT32_TO_LE (raw->len);\n'
-                '        g_byte_array_append (builder->fixed_buffer, (guint8 *)&length, sizeof (length));\n'
-                '\n'
-                '        /* And finally, the bytearray itself to the variable buffer */\n'
-                '        g_byte_array_append (builder->variable_buffer, (const guint8 *)raw->data, (guint)raw->len);\n'
-                '        g_byte_array_unref (raw);\n'
-                '    }\n'
-                '}\n'
-                '\n'
-                'static void\n'
-                '_mbim_message_command_builder_append_${name_underscore}_ref_struct_array (\n'
-                '    MbimMessageCommandBuilder *builder,\n'
-                '    const ${name} *const *values,\n'
-                '    guint32 n_values)\n'
-                '{\n'
-                '    _mbim_struct_builder_append_${name_underscore}_ref_struct_array (builder->contents_builder, values, n_values);\n'
-                '}\n')
-            cfile.write(string.Template(template).substitute(translations))
-
-        # append operations not implemented for self.ms_struct_array_member == True
+        template = (
+            '\n'
+            'static void\n'
+            '_mbim_message_command_builder_append_${name_underscore}_struct_array (\n'
+            '    MbimMessageCommandBuilder *builder,\n'
+            '    const ${name} *const *values,\n'
+            '    guint32 n_values,\n'
+            '    gboolean refs)\n'
+            '{\n'
+            '    _mbim_struct_builder_append_${name_underscore}_struct_array (builder->contents_builder, values, n_values, refs);\n'
+            '}\n')
+        cfile.write(string.Template(template).substitute(translations))
 
 
     """
@@ -1086,13 +860,13 @@ class Struct:
         template = (
             '<SUBSECTION ${struct_name}>\n'
             '${struct_name}\n')
-        if self.struct_array_member == True or self.ref_struct_array_member == True:
+        if self.array_member == True:
             template += (
                 '${struct_name}Array\n')
         if self.single_member == True:
             template += (
                 '${name_underscore}_free\n')
-        if self.struct_array_member == True or self.ref_struct_array_member == True:
+        if self.array_member == True:
             template += (
                 '${name_underscore}_array_free\n')
         sfile.write(string.Template(template).substitute(translations))

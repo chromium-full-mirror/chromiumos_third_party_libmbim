@@ -10,7 +10,6 @@ mbim_enums_headers = files(
   'mbim-enums.h',
   'mbim-message.h',
   'mbim-uuid.h',
-  'mbim-tlv.h',
 )
 
 subdir('generated')
@@ -25,13 +24,13 @@ headers = mbim_errors_header + mbim_enums_headers + files(
 
 install_headers(
   headers,
-  install_dir: mbim_glib_pkgincludedir,
+  subdir: mbim_glib_include_subdir,
 )
 
 common_c_flags = [
   '-DLIBMBIM_GLIB_COMPILATION',
   '-DG_LOG_DOMAIN="Mbim"',
-  '-DLIBEXEC_PATH="@0@"'.format(mbim_prefix / mbim_libexecdir),
+  '-DLIBEXEC_PATH="@0@"'.format(join_paths(mbim_prefix, mbim_libexecdir)),
 ]
 
 sources = files(
@@ -45,7 +44,6 @@ sources = files(
   'mbim-proxy-helpers.c',
   'mbim-utils.c',
   'mbim-uuid.c',
-  'mbim-tlv.c',
 )
 
 deps = [
@@ -77,8 +75,7 @@ version_header = configure_file(
   install_dir: mbim_glib_pkgincludedir,
 )
 
-symbol_map = meson.current_source_dir() / 'symbol.map'
-ldflags = cc.get_supported_link_arguments('-Wl,--version-script,@0@'.format(symbol_map))
+symbol_map = join_paths(meson.current_source_dir(), 'symbol.map')
 
 libmbim_glib = library(
   libname,
@@ -86,7 +83,7 @@ libmbim_glib = library(
   sources: version_header,
   include_directories: top_inc,
   dependencies: generated_dep,
-  link_args: ldflags,
+  link_args: '-Wl,--version-script,' + symbol_map,
   link_depends: symbol_map,
   link_whole: libmbim_glib_core,
   install: true,

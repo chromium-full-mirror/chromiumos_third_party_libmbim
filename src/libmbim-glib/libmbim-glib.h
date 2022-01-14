@@ -21,7 +21,6 @@
 #include "mbim-device.h"
 #include "mbim-enums.h"
 #include "mbim-proxy.h"
-#include "mbim-tlv.h"
 
 /* generated */
 #include "mbim-enum-types.h"

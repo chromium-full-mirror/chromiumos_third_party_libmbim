@@ -3,8 +3,7 @@
 /*
  * libmbim-glib -- GLib/GIO based library to control MBIM devices
  *
- * Copyright (C) 2013 - 2021 Aleksander Morgado <aleksander@aleksander.es>
- * Copyright (C) 2021 Intel Corporation
+ * Copyright (C) 2013 - 2014 Aleksander Morgado <aleksander@aleksander.es>
  */
 
 #ifndef _LIBMBIM_GLIB_MBIM_DEVICE_H_
@@ -213,87 +212,17 @@ const gchar *mbim_device_get_path_display (MbimDevice *self);
 gboolean mbim_device_is_open (MbimDevice *self);
 
 /**
- * mbim_device_get_ms_mbimex_version:
- * @self: a #MbimDevice.
- * @out_ms_mbimex_version_minor: output location for the minor version number of
- *  the MS MBIMEx support, or %NULL if not needed.
- *
- * Get the version number of the MS MBIMEx support.
- *
- * The reported version will be 1 if the initialization sequence to agree on
- * which version to use hasn't been run (e.g. with mbim_device_open_full() and
- * the explicit %MBIM_DEVICE_OPEN_FLAGS_MS_MBIMEX_V2 or
- * %MBIM_DEVICE_OPEN_FLAGS_MS_MBIMEX_V3 flag).
- *
- * Returns: the major version number of the MS MBIMEx support.
- *
- * Since: 1.28
- */
-guint8 mbim_device_get_ms_mbimex_version (MbimDevice *self,
-                                          guint8     *out_ms_mbimex_version_minor);
-
-/**
- * mbim_device_set_ms_mbimex_version:
- * @self: a #MbimDevice.
- * @ms_mbimex_version_major: major version number of the MS MBIMEx support.
- * @ms_mbimex_version_minor: minor version number of the MS MBIMEx support.
- * @error: Return location for error or %NULL.
- *
- * Set the version number of the MS MBIMEx support assumed in the device
- * instance, which may have been set already by a different process or
- * device instance.
- *
- * If this operation specifies the wrong MBIMEx version agreed between host
- * and device, the message processing on this device instance may fail.
- *
- * This operation does not do any MBIMEx version exchange with the device,
- * the only way to do that is with mbim_device_open_full() and the explicit
- * %MBIM_DEVICE_OPEN_FLAGS_MS_MBIMEX_V2 or %MBIM_DEVICE_OPEN_FLAGS_MS_MBIMEX_V3
- * flag.
- *
- * Returns: %TRUE if successful, %FALSE if @error is set.
- *
- * Since: 1.28
- */
-gboolean mbim_device_set_ms_mbimex_version (MbimDevice  *self,
-                                            guint8       ms_mbimex_version_major,
-                                            guint8       ms_mbimex_version_minor,
-                                            GError     **error);
-
-/**
- * mbim_device_check_ms_mbimex_version:
- * @self: a #MbimDevice.
- * @ms_mbimex_version_major: major version number of the MS MBIMEx support.
- * @ms_mbimex_version_minor: minor version number of the MS MBIMEx support.
- *
- * Checks the version number of the MS MBIMEx support in the device instance
- * against the one given as input.
- *
- * Returns: %TRUE if the version of the device instance is the same as or newer
- * than the passed-in version.
- *
- * Since: 1.28
- */
-gboolean mbim_device_check_ms_mbimex_version (MbimDevice *self,
-                                              guint8      ms_mbimex_version_major,
-                                              guint8      ms_mbimex_version_minor);
-
-/**
  * MbimDeviceOpenFlags:
  * @MBIM_DEVICE_OPEN_FLAGS_NONE: None.
  * @MBIM_DEVICE_OPEN_FLAGS_PROXY: Try to open the port through the 'mbim-proxy'.
- * @MBIM_DEVICE_OPEN_FLAGS_MS_MBIMEX_V2: Try to enable MS MBIMEx 2.0 support. Since 1.28.
- * @MBIM_DEVICE_OPEN_FLAGS_MS_MBIMEX_V3: Try to enable MS MBIMEx 3.0 support. Since 1.28.
  *
  * Flags to specify which actions to be performed when the device is open.
  *
  * Since: 1.10
  */
 typedef enum { /*< since=1.10 >*/
-    MBIM_DEVICE_OPEN_FLAGS_NONE         = 0,
-    MBIM_DEVICE_OPEN_FLAGS_PROXY        = 1 << 0,
-    MBIM_DEVICE_OPEN_FLAGS_MS_MBIMEX_V2 = 1 << 1,
-    MBIM_DEVICE_OPEN_FLAGS_MS_MBIMEX_V3 = 1 << 2,
+    MBIM_DEVICE_OPEN_FLAGS_NONE  = 0,
+    MBIM_DEVICE_OPEN_FLAGS_PROXY = 1 << 0
 } MbimDeviceOpenFlags;
 
 /**

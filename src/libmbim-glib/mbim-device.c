@@ -3,9 +3,8 @@
 /*
  * libmbim-glib -- GLib/GIO based library to control MBIM devices
  *
- * Copyright (C) 2013-2021 Aleksander Morgado <aleksander@aleksander.es>
+ * Copyright (C) 2013-2014 Aleksander Morgado <aleksander@aleksander.es>
  * Copyright (C) 2014 Smith Micro Software, Inc.
- * Copyright (C) 2021 Intel Corporation
  *
  * Implementation based on the 'QmiDevice' GObject from libqmi-glib.
  */
@@ -39,8 +38,6 @@
 #include "mbim-proxy.h"
 #include "mbim-proxy-control.h"
 #include "mbim-net-port-manager.h"
-#include "mbim-basic-connect.h"
-#include "mbim-ms-basic-connect-extensions.h"
 
 static void async_initable_iface_init (GAsyncInitableIface *iface);
 
@@ -113,10 +110,6 @@ struct _MbimDevicePrivate {
 
     /* message size */
     guint16 max_control_transfer;
-
-    /* MBIM extensions major and minor versions agreed with the device */
-    guint8 ms_mbimex_version_major;
-    guint8 ms_mbimex_version_minor;
 
     /* Link management */
     MbimNetPortManager *net_port_manager;
@@ -439,44 +432,6 @@ mbim_device_is_open (MbimDevice *self)
     g_return_val_if_fail (MBIM_IS_DEVICE (self), FALSE);
 
     return (self->priv->open_status == OPEN_STATUS_OPEN);
-}
-
-guint8
-mbim_device_get_ms_mbimex_version (MbimDevice *self,
-                                   guint8     *out_ms_mbimex_version_minor)
-{
-    g_return_val_if_fail (MBIM_IS_DEVICE (self), 0);
-
-    if (out_ms_mbimex_version_minor)
-        *out_ms_mbimex_version_minor = self->priv->ms_mbimex_version_minor;
-
-    return self->priv->ms_mbimex_version_major;
-}
-
-gboolean
-mbim_device_set_ms_mbimex_version (MbimDevice *self,
-                                   guint8      ms_mbimex_version_major,
-                                   guint8      ms_mbimex_version_minor,
-                                   GError    **error)
-{
-    g_return_val_if_fail (MBIM_IS_DEVICE (self), FALSE);
-
-    /* no checks that may make this method fail for now */
-    self->priv->ms_mbimex_version_major = ms_mbimex_version_major;
-    self->priv->ms_mbimex_version_minor = ms_mbimex_version_minor;
-    return TRUE;
-}
-
-gboolean
-mbim_device_check_ms_mbimex_version (MbimDevice *self,
-                                     guint8      ms_mbimex_version_major,
-                                     guint8      ms_mbimex_version_minor)
-{
-    g_return_val_if_fail (MBIM_IS_DEVICE (self), FALSE);
-
-    return ((self->priv->ms_mbimex_version_major > ms_mbimex_version_major) ||
-            ((self->priv->ms_mbimex_version_major == ms_mbimex_version_major) &&
-             (self->priv->ms_mbimex_version_minor >= ms_mbimex_version_minor)));
 }
 
 /*****************************************************************************/
@@ -810,29 +765,6 @@ indication_ready (MbimDevice   *self,
         return;
     }
 
-    /* Indications in the internal proxy control service are not emitted as
-     * signals, they're consumed internally */
-    {
-        guint16 mbim_version;
-        guint16 ms_mbimex_version;
-
-        if ((mbim_message_indicate_status_get_service (indication) == MBIM_SERVICE_PROXY_CONTROL) &&
-            (mbim_message_indicate_status_get_cid (indication) == MBIM_CID_PROXY_CONTROL_VERSION) &&
-            mbim_message_proxy_control_version_notification_parse (indication, &mbim_version, &ms_mbimex_version, NULL)) {
-
-            self->priv->ms_mbimex_version_major = (ms_mbimex_version >> 8) & 0xFF;
-            self->priv->ms_mbimex_version_minor = ms_mbimex_version & 0xFF;
-
-            g_debug ("[%s] version information update reported: version %x.%02x, extended version %x.%02x",
-                     self->priv->path_display,
-                     (mbim_version >> 8) & 0xFF,
-                     mbim_version & 0xFF,
-                     self->priv->ms_mbimex_version_major,
-                     self->priv->ms_mbimex_version_minor);
-            return;
-        }
-    }
-
     g_signal_emit (self, signals[SIGNAL_INDICATE_STATUS], 0, indication);
 }
 
@@ -889,12 +821,7 @@ process_message (MbimDevice        *self,
         if (is_partial_fragment) {
             g_autofree gchar *translated = NULL;
 
-            translated = mbim_message_get_printable_full (message,
-                                                          self->priv->ms_mbimex_version_major,
-                                                          self->priv->ms_mbimex_version_minor,
-                                                          ">>>>>> ",
-                                                          TRUE,
-                                                          NULL);
+            translated = mbim_message_get_printable (message, ">>>>>> ", TRUE);
             g_debug ("[%s] Received message fragment (translated)...\n%s",
                      self->priv->path_display,
                      translated);
@@ -941,12 +868,7 @@ process_message (MbimDevice        *self,
                 g_debug ("[%s] No transaction matched in received message",
                          self->priv->path_display);
                 /* Attempt to print a user friendly dump of the packet anyway */
-                printable = mbim_message_get_printable_full (message,
-                                                             self->priv->ms_mbimex_version_major,
-                                                             self->priv->ms_mbimex_version_minor,
-                                                             ">>>>>> ",
-                                                             is_partial_fragment,
-                                                             NULL);
+                printable = mbim_message_get_printable (message, ">>>>>> ", is_partial_fragment);
                 if (printable)
                     g_debug ("[%s] Received unexpected message (translated)...\n%s",
                              self->priv->path_display,
@@ -991,12 +913,7 @@ process_message (MbimDevice        *self,
             if (mbim_utils_get_traces_enabled ()) {
                 g_autofree gchar *printable = NULL;
 
-                printable = mbim_message_get_printable_full (ctx->fragments,
-                                                             self->priv->ms_mbimex_version_major,
-                                                             self->priv->ms_mbimex_version_minor,
-                                                             ">>>>>> ",
-                                                             FALSE,
-                                                             NULL);
+                printable = mbim_message_get_printable (ctx->fragments, ">>>>>> ", FALSE);
                 g_debug ("[%s] Received message (translated)...\n%s",
                          self->priv->path_display,
                          printable);
@@ -1032,12 +949,7 @@ process_message (MbimDevice        *self,
         if (mbim_utils_get_traces_enabled ()) {
             g_autofree gchar *printable = NULL;
 
-            printable = mbim_message_get_printable_full (message,
-                                                         self->priv->ms_mbimex_version_major,
-                                                         self->priv->ms_mbimex_version_minor,
-                                                         ">>>>>> ",
-                                                         FALSE,
-                                                         NULL);
+            printable = mbim_message_get_printable (message, ">>>>>> ", FALSE);
             g_debug ("[%s] Received message (translated)...\n%s",
                      self->priv->path_display,
                      printable);
@@ -1561,8 +1473,6 @@ typedef enum {
     DEVICE_OPEN_CONTEXT_STEP_FLAGS_PROXY,
     DEVICE_OPEN_CONTEXT_STEP_CLOSE_MESSAGE,
     DEVICE_OPEN_CONTEXT_STEP_OPEN_MESSAGE,
-    DEVICE_OPEN_CONTEXT_STEP_DEVICE_SERVICES,
-    DEVICE_OPEN_CONTEXT_STEP_MS_EXT_VERSION,
     DEVICE_OPEN_CONTEXT_STEP_LAST
 } DeviceOpenContextStep;
 
@@ -1581,6 +1491,8 @@ device_open_context_free (DeviceOpenContext *ctx)
     g_slice_free (DeviceOpenContext, ctx);
 }
 
+static void device_open_context_step (GTask *task);
+
 gboolean
 mbim_device_open_full_finish (MbimDevice    *self,
                               GAsyncResult  *res,
@@ -1597,167 +1509,7 @@ mbim_device_open_finish (MbimDevice   *self,
     return mbim_device_open_full_finish (self, res, error);
 }
 
-static void device_open_context_step (GTask *task);
-
-static void
-ms_ext_version_message_ready (MbimDevice   *self,
-                              GAsyncResult *res,
-                              GTask        *task)
-{
-    g_autoptr(MbimMessage)  response = NULL;
-    g_autoptr(GError)       error = NULL;
-    guint16                 mbim_version;
-    guint16                 ms_mbimex_version;
-    DeviceOpenContext      *ctx;
-
-    ctx = g_task_get_task_data (task);
-
-    response = mbim_device_command_finish (self, res, &error);
-    if (!response ||
-        !mbim_message_response_get_result (response, MBIM_MESSAGE_TYPE_COMMAND_DONE, &error) ||
-        !mbim_message_ms_basic_connect_extensions_v2_version_response_parse (
-            response,
-            &mbim_version,
-            &ms_mbimex_version,
-            &error)){
-        g_task_return_error (task, error);
-        g_object_unref (task);
-        return;
-    }
-
-    /* We fully ignore the MBIM version for now, we just assume it's 1.0, which
-     * is the only known release from the USB-IF for now. */
-    self->priv->ms_mbimex_version_major = (ms_mbimex_version >> 8) & 0xFF;
-    self->priv->ms_mbimex_version_minor = ms_mbimex_version & 0xFF;
-
-    g_debug ("[%s] successfully exchanged version information: version %x.%02x, extended version %x.%02x",
-             self->priv->path_display,
-             (mbim_version >> 8) & 0xFF,
-             mbim_version & 0xFF,
-             self->priv->ms_mbimex_version_major,
-             self->priv->ms_mbimex_version_minor);
-
-    ctx->step++;
-    device_open_context_step (task);
-}
-
-static void
-ms_ext_version_message (GTask *task)
-{
-    MbimDevice             *self;
-    DeviceOpenContext      *ctx;
-    g_autoptr(MbimMessage)  request = NULL;
-    guint32                 mbim_version = 0;
-    guint32                 ms_mbimex_version = 0;
-
-    self = g_task_get_source_object (task);
-    ctx = g_task_get_task_data (task);
-
-    if ((ctx->flags & MBIM_DEVICE_OPEN_FLAGS_MS_MBIMEX_V2) && (ctx->flags & MBIM_DEVICE_OPEN_FLAGS_MS_MBIMEX_V3)) {
-        g_task_return_new_error (task, MBIM_CORE_ERROR, MBIM_CORE_ERROR_INVALID_ARGS,
-                                 "Cannot request both MBIMEx v2.0 and v3.0 at the same time");
-        g_object_unref (task);
-        return;
-    }
-
-    /* User requested MBIMEx 2.0 or 3.0, so we'll report it along with MBIM 1.0 */
-    mbim_version = 0x01 << 8 | 0x00;
-    if (ctx->flags & MBIM_DEVICE_OPEN_FLAGS_MS_MBIMEX_V2)
-        ms_mbimex_version = 0x02 << 8 | 0x00;
-    else if (ctx->flags & MBIM_DEVICE_OPEN_FLAGS_MS_MBIMEX_V3)
-        ms_mbimex_version = 0x03 << 8 | 0x00;
-    else
-        g_assert_not_reached ();
-
-    request = mbim_message_ms_basic_connect_extensions_v2_version_query_new (mbim_version, ms_mbimex_version, NULL);
-    g_assert (request);
-
-    mbim_device_command (self,
-                         request,
-                         ctx->timeout,
-                         g_task_get_cancellable (task),
-                         (GAsyncReadyCallback)ms_ext_version_message_ready,
-                         task);
-}
-
-static void
-device_services_message_ready (MbimDevice   *device,
-                               GAsyncResult *res,
-                               GTask        *task)
-{
-    g_autoptr(MbimMessage)                    response = NULL;
-    g_autoptr(GError)                         error = NULL;
-    g_autoptr(MbimDeviceServiceElementArray)  device_services = NULL;
-    guint32                                   device_services_count;
-    guint32                                   max_dss_sessions;
-    DeviceOpenContext                        *ctx;
-    guint                                     i;
-
-    ctx = g_task_get_task_data (task);
-
-    response = mbim_device_command_finish (device, res, &error);
-    if (!response ||
-        !mbim_message_response_get_result (response, MBIM_MESSAGE_TYPE_COMMAND_DONE, &error) ||
-        !mbim_message_device_services_response_parse (
-            response,
-            &device_services_count,
-            &max_dss_sessions,
-            &device_services,
-            &error)) {
-        g_task_return_error (task, error);
-        g_object_unref (task);
-        return;
-    }
-
-    if (device_services_count == 0) {
-        g_task_return_new_error (task, MBIM_CORE_ERROR, MBIM_CORE_ERROR_FAILED,
-                                 "No supported services reported by the modem");
-        g_object_unref (task);
-        return;
-    }
-
-    for (i = 0; i < device_services_count; i++) {
-        MbimService service;
-        guint32     j;
-
-        service = mbim_uuid_to_service (&device_services[i]->device_service_id);
-        for (j = 0; j < device_services[i]->cids_count; j++) {
-
-            if ((service == MBIM_SERVICE_MS_BASIC_CONNECT_EXTENSIONS) &&
-                device_services[i]->cids[j] == MBIM_CID_MS_BASIC_CONNECT_EXTENSIONS_VERSION) {
-                /* version command is supported, go on */
-                ctx->step++;
-                device_open_context_step (task);
-                return;
-            }
-        }
-    }
-
-    /* the version command isn't supported, so we can just jump to the end */
-    ctx->step = DEVICE_OPEN_CONTEXT_STEP_LAST;;
-    device_open_context_step (task);
-}
-
-static void
-device_services_message (GTask *task)
-{
-    MbimDevice             *self;
-    DeviceOpenContext      *ctx;
-    g_autoptr(MbimMessage)  request = NULL;
-
-    self = g_task_get_source_object (task);
-    ctx  = g_task_get_task_data (task);
-
-    request = mbim_message_device_services_query_new (NULL);
-    g_assert (request);
-
-    mbim_device_command (self,
-                         request,
-                         ctx->timeout,
-                         g_task_get_cancellable (task),
-                         (GAsyncReadyCallback)device_services_message_ready,
-                         task);
-}
+static void open_message (GTask *task);
 
 static void
 open_message_ready (MbimDevice   *self,
@@ -2021,22 +1773,6 @@ device_open_context_step (GTask *task)
         ctx->step++;
         /* Fall through */
 
-        case DEVICE_OPEN_CONTEXT_STEP_DEVICE_SERVICES:
-        if (ctx->flags & (MBIM_DEVICE_OPEN_FLAGS_MS_MBIMEX_V2 | MBIM_DEVICE_OPEN_FLAGS_MS_MBIMEX_V3)) {
-            device_services_message (task);
-            return;
-        }
-        ctx->step++;
-        /* Fall through */
-
-        case DEVICE_OPEN_CONTEXT_STEP_MS_EXT_VERSION:
-        if (ctx->flags & (MBIM_DEVICE_OPEN_FLAGS_MS_MBIMEX_V2 | MBIM_DEVICE_OPEN_FLAGS_MS_MBIMEX_V3)) {
-            ms_ext_version_message (task);
-            return;
-        }
-        ctx->step++;
-        /* Fall through */
-
     case DEVICE_OPEN_CONTEXT_STEP_LAST:
         /* Nothing else to process, complete without error */
         self->priv->open_status = OPEN_STATUS_OPEN;
@@ -2102,6 +1838,8 @@ destroy_iochannel (MbimDevice  *self,
                    GError     **error)
 {
     GError *inner_error = NULL;
+
+    self->priv->open_status = OPEN_STATUS_CLOSED;
 
     /* Already closed? */
     if (!self->priv->iochannel && !self->priv->socket_connection && !self->priv->socket_client)
@@ -2170,21 +1908,16 @@ close_message_ready (MbimDevice   *self,
                      GAsyncResult *res,
                      GTask        *task)
 {
-    g_autoptr(MbimMessage) response = NULL;
-    g_autoptr(GError)      error = NULL;
-    g_autoptr(GError)      iochannel_error = NULL;
+    g_autoptr(MbimMessage)  response = NULL;
+    GError                 *error = NULL;
 
     response = mbim_device_command_finish (self, res, &error);
-    if (response)
-        mbim_message_response_get_result (response, MBIM_MESSAGE_TYPE_CLOSE_DONE, &error);
-
-    self->priv->open_status = OPEN_STATUS_CLOSED;
-    destroy_iochannel (self, &iochannel_error);
-
-    if (error)
-        g_task_return_error (task, g_steal_pointer (&error));
-    else if (iochannel_error)
-        g_task_return_error (task, g_steal_pointer (&iochannel_error));
+    if (!response)
+        g_task_return_error (task, error);
+    else if (!mbim_message_response_get_result (response, MBIM_MESSAGE_TYPE_CLOSE_DONE, &error))
+        g_task_return_error (task, error);
+    else if (!destroy_iochannel (self, &error))
+        g_task_return_error (task, error);
     else
         g_task_return_boolean (task, TRUE);
     g_object_unref (task);
@@ -2209,33 +1942,17 @@ mbim_device_close (MbimDevice          *self,
     task = g_task_new (self, cancellable, callback, user_data);
     g_task_set_task_data (task, ctx, (GDestroyNotify)device_close_context_free);
 
-    /* If already closed, we're done */
-    if (self->priv->open_status == OPEN_STATUS_CLOSED) {
+    /* Already closed? */
+    if (!self->priv->iochannel) {
         g_task_return_boolean (task, TRUE);
         g_object_unref (task);
         return;
     }
 
-    /* If we're opening, fail with error. We could say we would abort the
-     * ongoing open attempt, but the way to abort that attempt is with the
-     * cancellable given in the open operation, not with an additional close.
-     */
-    if (self->priv->open_status == OPEN_STATUS_OPENING) {
-        g_task_return_new_error (
-            task, MBIM_CORE_ERROR, MBIM_CORE_ERROR_WRONG_STATE,
-            "Cannot close device: not yet fully open");
-        g_object_unref (task);
-        return;
-    }
-
-    g_debug ("[%s] closing device...", self->priv->path_display);
-    g_assert (self->priv->open_status == OPEN_STATUS_OPEN);
-
     /* If the device is in-session, avoid the close message */
     if (self->priv->in_session) {
         GError *error = NULL;
 
-        self->priv->open_status = OPEN_STATUS_CLOSED;
         if (!destroy_iochannel (self, &error))
             g_task_return_error (task, error);
         else
@@ -2359,12 +2076,7 @@ device_send (MbimDevice   *self,
                  ((GByteArray *)message)->len,
                  hex);
 
-        printable = mbim_message_get_printable_full (message,
-                                                     self->priv->ms_mbimex_version_major,
-                                                     self->priv->ms_mbimex_version_minor,
-                                                     "<<<<<< ",
-                                                     FALSE,
-                                                     NULL);
+        printable = mbim_message_get_printable (message, "<<<<<< ", FALSE);
         g_debug ("[%s] Sent message (translated)...\n%s",
                  self->priv->path_display,
                  printable);
@@ -2387,14 +2099,9 @@ device_send (MbimDevice   *self,
         g_byte_array_append (full_fragment, (guint8 *)&fragments[i].header, sizeof (fragments[i].header));
         g_byte_array_append (full_fragment, (guint8 *)&fragments[i].fragment_header, sizeof (fragments[i].fragment_header));
 
-        /* Build placeholder message with only headers for printable purposes only */
+        /* Build dummy message with only headers for printable purposes only */
         if (mbim_utils_get_traces_enabled ())
-            printable_headers = mbim_message_get_printable_full ((MbimMessage *)full_fragment,
-                                                                 self->priv->ms_mbimex_version_major,
-                                                                 self->priv->ms_mbimex_version_minor,
-                                                                 "<<<<<< ",
-                                                                 TRUE,
-                                                                 NULL);
+            printable_headers = mbim_message_get_printable ((MbimMessage *)full_fragment, "<<<<<< ", TRUE);
 
         /* Append the actual fragment data */
         g_byte_array_append (full_fragment, (guint8 *)fragments[i].data, fragments[i].data_length);
@@ -2729,9 +2436,6 @@ mbim_device_init (MbimDevice *self)
     /* Initialize transaction ID */
     self->priv->transaction_id = 0x01;
     self->priv->open_status = OPEN_STATUS_CLOSED;
-
-    /* By default, assume v1.0 supported */
-    self->priv->ms_mbimex_version_major = 0x01;
 }
 
 static void
@@ -2741,7 +2445,6 @@ dispose (GObject *object)
 
     g_clear_object (&self->priv->file);
 
-    self->priv->open_status = OPEN_STATUS_CLOSED;
     destroy_iochannel (self, NULL);
     g_clear_object (&self->priv->net_port_manager);
 
