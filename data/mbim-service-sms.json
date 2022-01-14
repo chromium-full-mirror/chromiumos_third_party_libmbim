@@ -6,7 +6,6 @@
 
   // *********************************************************************************
   { "name"     : "Configuration",
-    "service"  : "SMS",
     "type"     : "Command",
     "since"    : "1.4",
     "set"      : [ { "name"          : "Format",
@@ -57,14 +56,13 @@
                      "public-format" : "MbimSmsCdmaEncoding" },
                    { "name"          : "Language",
                      "format"        : "guint32",
-                     "public-format" : "MbimSmsCdmaLanguage" },
+                     "public-format" : "MbimSmsCdmaLang" },
                    { "name"   : "EncodedMessage",
                      "format" : "ref-byte-array" },
                    { "name"   : "EncodedMessageSizeInCharacters",
                      "format" : "guint32" } ] },
 
   { "name"         : "Read",
-    "service"      : "SMS",
     "type"         : "Command",
     "since"        : "1.4",
     "query"        : [ { "name"          : "Format",
@@ -129,7 +127,7 @@
                      "public-format" : "MbimSmsCdmaEncoding" },
                    { "name"          : "Language",
                      "format"        : "guint32",
-                     "public-format" : "MbimSmsCdmaLanguage" },
+                     "public-format" : "MbimSmsCdmaLang" },
                    { "name"   : "Address",
                      "format" : "string" },
                    { "name"   : "EncodedMessage",
@@ -138,7 +136,6 @@
                      "format" : "guint32" } ] },
 
   { "name"     : "Send",
-    "service"  : "SMS",
     "type"     : "Command",
     "since"    : "1.4",
     "set"      : [ { "name"          : "Format",
@@ -161,7 +158,6 @@
 
   // *********************************************************************************
   { "name"     : "Delete",
-    "service"  : "SMS",
     "type"     : "Command",
     "since"    : "1.4",
     "set"      : [ { "name"          : "Flag",
@@ -173,7 +169,6 @@
 
   // *********************************************************************************
   { "name"         : "Message Store Status",
-    "service"      : "SMS",
     "type"         : "Command",
     "since"        : "1.4",
     "query"        : [],

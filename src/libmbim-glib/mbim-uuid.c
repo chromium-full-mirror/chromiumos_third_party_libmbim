@@ -232,6 +232,14 @@ static const MbimUuid uuid_ms_uicc_low_level_access = {
     .e = { 0xf4, 0xd4, 0x4b, 0xd0, 0x93, 0x67 }
 };
 
+static const MbimUuid uuid_quectel = {
+    .a = { 0x11, 0x22, 0x33, 0x44 },
+    .b = { 0x55, 0x66 },
+    .c = { 0x77, 0x88 },
+    .d = { 0x99, 0xaa },
+    .e = { 0xbb, 0xcc, 0xdd, 0xee, 0xff, 0x11 }
+};
+
 static GList *mbim_custom_service_list = NULL;
 
 typedef struct {
@@ -361,6 +369,8 @@ mbim_uuid_from_service (MbimService service)
         return &uuid_ms_basic_connect_extensions;
     case MBIM_SERVICE_MS_UICC_LOW_LEVEL_ACCESS:
         return &uuid_ms_uicc_low_level_access;
+    case MBIM_SERVICE_QUECTEL:
+        return &uuid_quectel;
     case MBIM_SERVICE_LAST:
         g_assert_not_reached ();
     default:
@@ -427,6 +437,9 @@ mbim_uuid_to_service (const MbimUuid *uuid)
 
     if (mbim_uuid_cmp (uuid, &uuid_ms_uicc_low_level_access))
         return MBIM_SERVICE_MS_UICC_LOW_LEVEL_ACCESS;
+
+    if (mbim_uuid_cmp (uuid, &uuid_quectel))
+        return MBIM_SERVICE_QUECTEL;
 
     for (l = mbim_custom_service_list; l != NULL; l = l->next) {
         if (mbim_uuid_cmp (&((MbimCustomService *)l->data)->uuid, uuid))
@@ -510,6 +523,46 @@ static const MbimUuid uuid_context_type_local = {
     .e = { 0x03, 0x3C, 0x39, 0xF6, 0x0D, 0xB9 }
 };
 
+static const MbimUuid uuid_context_type_admin = {
+    .a = { 0x5F, 0x7E, 0x4C, 0x2E },
+    .b = { 0xE8, 0x0B },
+    .c = { 0x40, 0xA9 },
+    .d = { 0xA2, 0x39 },
+    .e = { 0xF0, 0xAB, 0xCF, 0xD1, 0x1F, 0x4B }
+};
+
+static const MbimUuid uuid_context_type_app = {
+    .a = { 0x74, 0xD8, 0x8A, 0x3D },
+    .b = { 0xDF, 0xBD },
+    .c = { 0x47, 0x99 },
+    .d = { 0x9A, 0x8C },
+    .e = { 0x73, 0x10, 0xA3, 0x7B, 0xB2, 0xEE }
+};
+
+static const MbimUuid uuid_context_type_xcap = {
+    .a = { 0x50, 0xD3, 0x78, 0xA7 },
+    .b = { 0xBA, 0xA5 },
+    .c = { 0x4A, 0x50 },
+    .d = { 0xB8, 0x72 },
+    .e = { 0x3F, 0xE5, 0xBB, 0x46, 0x34, 0x11 }
+};
+
+static const MbimUuid uuid_context_type_tethering = {
+    .a = { 0x5E, 0x4E, 0x06, 0x01 },
+    .b = { 0x48, 0xDC },
+    .c = { 0x4E, 0x2B },
+    .d = { 0xAC, 0xB8 },
+    .e = { 0x08, 0xB4, 0x01, 0x6B, 0xBA, 0xAC }
+};
+
+static const MbimUuid uuid_context_type_emergency_calling = {
+    .a = { 0x5F, 0x41, 0xAD, 0xB8 },
+    .b = { 0x20, 0x4E },
+    .c = { 0x4D, 0x31 },
+    .d = { 0x9D, 0xA8 },
+    .e = { 0xB3, 0xC9, 0x70, 0xE3, 0x60, 0xF2 }
+};
+
 const MbimUuid *
 mbim_uuid_from_context_type (MbimContextType context_type)
 {
@@ -536,6 +589,16 @@ mbim_uuid_from_context_type (MbimContextType context_type)
         return &uuid_context_type_mms;
     case MBIM_CONTEXT_TYPE_LOCAL:
         return &uuid_context_type_local;
+    case MBIM_CONTEXT_TYPE_ADMIN:
+        return &uuid_context_type_admin;
+    case MBIM_CONTEXT_TYPE_APP:
+        return &uuid_context_type_app;
+    case MBIM_CONTEXT_TYPE_XCAP:
+        return &uuid_context_type_xcap;
+    case MBIM_CONTEXT_TYPE_TETHERING:
+        return &uuid_context_type_tethering;
+    case MBIM_CONTEXT_TYPE_EMERGENCY_CALLING:
+        return &uuid_context_type_emergency_calling;
     default:
         g_assert_not_reached ();
     }
@@ -570,6 +633,21 @@ mbim_uuid_to_context_type (const MbimUuid *uuid)
 
     if (mbim_uuid_cmp (uuid, &uuid_context_type_local))
         return MBIM_CONTEXT_TYPE_LOCAL;
+
+    if (mbim_uuid_cmp (uuid, &uuid_context_type_admin))
+        return MBIM_CONTEXT_TYPE_ADMIN;
+
+    if (mbim_uuid_cmp (uuid, &uuid_context_type_app))
+        return MBIM_CONTEXT_TYPE_APP;
+
+    if (mbim_uuid_cmp (uuid, &uuid_context_type_xcap))
+        return MBIM_CONTEXT_TYPE_XCAP;
+
+    if (mbim_uuid_cmp (uuid, &uuid_context_type_tethering))
+        return MBIM_CONTEXT_TYPE_TETHERING;
+
+    if (mbim_uuid_cmp (uuid, &uuid_context_type_emergency_calling))
+        return MBIM_CONTEXT_TYPE_EMERGENCY_CALLING;
 
     return MBIM_CONTEXT_TYPE_INVALID;
 }

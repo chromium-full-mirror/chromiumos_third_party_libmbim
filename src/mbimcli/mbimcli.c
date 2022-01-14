@@ -37,6 +37,8 @@ static gboolean operation_status;
 /* Main options */
 static gchar *device_str;
 static gboolean device_open_proxy_flag;
+static gboolean device_open_ms_mbimex_v2_flag;
+static gboolean device_open_ms_mbimex_v3_flag;
 static gchar *no_open_str;
 static gboolean no_close_flag;
 static gboolean noop_flag;
@@ -51,6 +53,14 @@ static GOptionEntry main_entries[] = {
     },
     { "device-open-proxy", 'p', 0, G_OPTION_ARG_NONE, &device_open_proxy_flag,
       "Request to use the 'mbim-proxy' proxy",
+      NULL
+    },
+    { "device-open-ms-mbimex-v2", 0, 0, G_OPTION_ARG_NONE, &device_open_ms_mbimex_v2_flag,
+      "Request to enable Microsoft MBIMEx v2.0 support",
+      NULL
+    },
+    { "device-open-ms-mbimex-v3", 0, 0, G_OPTION_ARG_NONE, &device_open_ms_mbimex_v3_flag,
+      "Request to enable Microsoft MBIMEx v3.0 support",
       NULL
     },
     { "no-open", 0, 0, G_OPTION_ARG_STRING, &no_open_str,
@@ -284,6 +294,9 @@ device_open_ready (MbimDevice   *dev,
     case MBIM_SERVICE_MS_BASIC_CONNECT_EXTENSIONS:
         mbimcli_ms_basic_connect_extensions_run (dev, cancellable);
         return;
+    case MBIM_SERVICE_QUECTEL:
+        mbimcli_quectel_run (dev, cancellable);
+        return;
     case MBIM_SERVICE_SMS:
     case MBIM_SERVICE_USSD:
     case MBIM_SERVICE_STK:
@@ -332,6 +345,10 @@ device_new_ready (GObject      *unused,
     /* Setup device open flags */
     if (device_open_proxy_flag)
         open_flags |= MBIM_DEVICE_OPEN_FLAGS_PROXY;
+    if (device_open_ms_mbimex_v2_flag)
+        open_flags |= MBIM_DEVICE_OPEN_FLAGS_MS_MBIMEX_V2;
+    if (device_open_ms_mbimex_v3_flag)
+        open_flags |= MBIM_DEVICE_OPEN_FLAGS_MS_MBIMEX_V3;
 
     /* Open the device */
     mbim_device_open_full (device,
@@ -397,6 +414,11 @@ parse_actions (void)
         actions_enabled++;
     }
 
+    if (mbimcli_quectel_options_enabled ()) {
+        service = MBIM_SERVICE_QUECTEL;
+        actions_enabled++;
+    }
+
     /* Noop */
     if (noop_flag)
         actions_enabled++;
@@ -410,6 +432,11 @@ parse_actions (void)
     /* No options? */
     if (actions_enabled == 0) {
         g_printerr ("error: no actions specified\n");
+        exit (EXIT_FAILURE);
+    }
+
+    if (device_open_ms_mbimex_v2_flag && device_open_ms_mbimex_v3_flag) {
+        g_printerr ("error: cannot request both MBIMEx v2.0 and 3.0 at the same time\n");
         exit (EXIT_FAILURE);
     }
 
@@ -435,6 +462,7 @@ int main (int argc, char **argv)
     g_option_context_add_group (context, mbimcli_atds_get_option_group ());
     g_option_context_add_group (context, mbimcli_intel_firmware_update_get_option_group ());
     g_option_context_add_group (context, mbimcli_ms_basic_connect_extensions_get_option_group ());
+    g_option_context_add_group (context, mbimcli_quectel_get_option_group ());
     g_option_context_add_group (context, mbimcli_link_management_get_option_group ());
     g_option_context_add_main_entries (context, main_entries, NULL);
     if (!g_option_context_parse (context, &argc, &argv, &error)) {

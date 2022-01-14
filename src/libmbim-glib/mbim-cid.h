@@ -238,6 +238,7 @@ typedef enum { /*< since=1.26 >*/
  * MbimCidProxyControl:
  * @MBIM_CID_PROXY_CONTROL_UNKNOWN: Unknown command.
  * @MBIM_CID_PROXY_CONTROL_CONFIGURATION: Configuration.
+ * @MBIM_CID_PROXY_CONTROL_VERSION: MBIM and MBIMEx Version reporting.
  *
  * MBIM commands in the %MBIM_SERVICE_PROXY_CONTROL service.
  *
@@ -245,7 +246,8 @@ typedef enum { /*< since=1.26 >*/
  */
 typedef enum { /*< since=1.10 >*/
     MBIM_CID_PROXY_CONTROL_UNKNOWN       = 0,
-    MBIM_CID_PROXY_CONTROL_CONFIGURATION = 1
+    MBIM_CID_PROXY_CONTROL_CONFIGURATION = 1,
+    MBIM_CID_PROXY_CONTROL_VERSION       = 2,
 } MbimCidProxyControl;
 
 /**
@@ -320,7 +322,7 @@ typedef enum { /*< since=1.26 >*/
  * MbimCidMsBasicConnectExtensions:
  * @MBIM_CID_MS_BASIC_CONNECT_EXTENSIONS_UNKNOWN: Unknown command.
  * @MBIM_CID_MS_BASIC_CONNECT_EXTENSIONS_PROVISIONED_CONTEXTS: Provisioned contexts (v2).
- * @MBIM_CID_MS_BASIC_CONNECT_EXTENSIONS_NETWORK_BLACKLIST: Network blacklist.
+ * @MBIM_CID_MS_BASIC_CONNECT_EXTENSIONS_NETWORK_DENYLIST: Network denylist. Since 1.28.
  * @MBIM_CID_MS_BASIC_CONNECT_EXTENSIONS_LTE_ATTACH_CONFIGURATION: LTE attach configuration.
  * @MBIM_CID_MS_BASIC_CONNECT_EXTENSIONS_LTE_ATTACH_INFO: LTE attach status information. Since 1.26.
  * @MBIM_CID_MS_BASIC_CONNECT_EXTENSIONS_SYS_CAPS: System capabilities.
@@ -329,6 +331,12 @@ typedef enum { /*< since=1.26 >*/
  * @MBIM_CID_MS_BASIC_CONNECT_EXTENSIONS_SLOT_INFO_STATUS: Slot info status.
  * @MBIM_CID_MS_BASIC_CONNECT_EXTENSIONS_PCO: Protocol configuration operations (PCO).
  * @MBIM_CID_MS_BASIC_CONNECT_EXTENSIONS_DEVICE_RESET: Device reset.
+ * @MBIM_CID_MS_BASIC_CONNECT_EXTENSIONS_BASE_STATIONS_INFO: Base stations info. Since 1.28.
+ * @MBIM_CID_MS_BASIC_CONNECT_EXTENSIONS_LOCATION_INFO_STATUS: Location info status. Since 1.28.
+ * @MBIM_CID_MS_BASIC_CONNECT_EXTENSIONS_VERSION: Protocol version query and report, defined in MBIMEx v2.0. Since 1.28.
+ * @MBIM_CID_MS_BASIC_CONNECT_EXTENSIONS_MODEM_CONFIGURATION: Modem configuration status, defined in MBIMEx v3.0. Since 1.28.
+ * @MBIM_CID_MS_BASIC_CONNECT_EXTENSIONS_REGISTRATION_PARAMETERS: Registration parameters, defined in MBIMEx v3.0. Since 1.28.
+ * @MBIM_CID_MS_BASIC_CONNECT_EXTENSIONS_WAKE_REASON: Protocol wake reason query and report, defined in MBIMEx v3.0. Since 1.28
  *
  * MBIM commands in the %MBIM_SERVICE_MS_BASIC_CONNECT_EXTENSIONS service.
  *
@@ -337,7 +345,7 @@ typedef enum { /*< since=1.26 >*/
 typedef enum { /*< since=1.18 >*/
     MBIM_CID_MS_BASIC_CONNECT_EXTENSIONS_UNKNOWN                  = 0,
     MBIM_CID_MS_BASIC_CONNECT_EXTENSIONS_PROVISIONED_CONTEXTS     = 1,
-    MBIM_CID_MS_BASIC_CONNECT_EXTENSIONS_NETWORK_BLACKLIST        = 2,
+    MBIM_CID_MS_BASIC_CONNECT_EXTENSIONS_NETWORK_DENYLIST         = 2,
     MBIM_CID_MS_BASIC_CONNECT_EXTENSIONS_LTE_ATTACH_CONFIGURATION = 3,
     MBIM_CID_MS_BASIC_CONNECT_EXTENSIONS_LTE_ATTACH_INFO          = 4,
     MBIM_CID_MS_BASIC_CONNECT_EXTENSIONS_SYS_CAPS                 = 5,
@@ -346,6 +354,12 @@ typedef enum { /*< since=1.18 >*/
     MBIM_CID_MS_BASIC_CONNECT_EXTENSIONS_SLOT_INFO_STATUS         = 8,
     MBIM_CID_MS_BASIC_CONNECT_EXTENSIONS_PCO                      = 9,
     MBIM_CID_MS_BASIC_CONNECT_EXTENSIONS_DEVICE_RESET             = 10,
+    MBIM_CID_MS_BASIC_CONNECT_EXTENSIONS_BASE_STATIONS_INFO       = 11,
+    MBIM_CID_MS_BASIC_CONNECT_EXTENSIONS_LOCATION_INFO_STATUS     = 12,
+    MBIM_CID_MS_BASIC_CONNECT_EXTENSIONS_VERSION                  = 15,
+    MBIM_CID_MS_BASIC_CONNECT_EXTENSIONS_MODEM_CONFIGURATION      = 16,
+    MBIM_CID_MS_BASIC_CONNECT_EXTENSIONS_REGISTRATION_PARAMETERS  = 17,
+    MBIM_CID_MS_BASIC_CONNECT_EXTENSIONS_WAKE_REASON              = 19,
 } MbimCidMsBasicConnectExtensions;
 
 /* Command helpers */
@@ -373,6 +387,20 @@ typedef enum { /*< since=1.26 >*/
     MBIM_CID_MS_UICC_LOW_LEVEL_ACCESS_TERMINAL_CAPABILITY  = 5,
     MBIM_CID_MS_UICC_LOW_LEVEL_ACCESS_RESET                = 6,
 } MbimCidMsUiccLowLevelAccess;
+
+/**
+ * MbimCidQuectel:
+ * @MBIM_CID_QUECTEL_UNKNOWN: Unknown command.
+ * @MBIM_CID_QUECTEL_RADIO_STATE: Radio state.
+ *
+ * MBIM commands in the %MBIM_SERVICE_QUECTEL service.
+ *
+ * Since: 1.26.2
+ */
+typedef enum { /*< since=1.26.2 >*/
+    MBIM_CID_QUECTEL_UNKNOWN     = 0,
+    MBIM_CID_QUECTEL_RADIO_STATE = 1,
+} MbimCidQuectel;
 
 /**
  * mbim_cid_can_set:

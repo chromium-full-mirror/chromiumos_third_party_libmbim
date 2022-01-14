@@ -59,6 +59,7 @@
     <xi:include href="xml/mbim-enums.xml"/>
     <xi:include href="xml/mbim-errors.xml"/>
     <xi:include href="xml/mbim-utils.xml"/>
+    <xi:include href="xml/mbim-tlv.xml"/>
   </chapter>
 
   <chapter>
@@ -95,6 +96,11 @@
   <chapter>
     <title>Intel-defined Services</title>
     <xi:include href="xml/mbim-intel-firmware-update.xml"/>
+  </chapter>
+
+  <chapter>
+    <title>Quectel-defined Services</title>
+    <xi:include href="xml/mbim-quectel.xml"/>
   </chapter>
 
   <chapter>
@@ -161,6 +167,14 @@
   <chapter id="api-index-1-26" role="1.26">
     <title>Index of new symbols in 1.26</title>
     <xi:include href="xml/api-index-1.26.xml"></xi:include>
+  </chapter>
+  <chapter id="api-index-1-26-2" role="1.26.2">
+    <title>Index of new symbols in 1.26.2</title>
+    <xi:include href="xml/api-index-1.26.2.xml"></xi:include>
+  </chapter>
+  <chapter id="api-index-1-28" role="1.28">
+    <title>Index of new symbols in 1.28</title>
+    <xi:include href="xml/api-index-1.28.xml"></xi:include>
   </chapter>
 
   <xi:include href="xml/annotation-glossary.xml"><xi:fallback /></xi:include>

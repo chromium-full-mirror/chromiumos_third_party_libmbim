@@ -98,6 +98,8 @@ typedef enum { /*< since=1.0 >*/
  * @MBIM_DATA_CLASS_HSDPA: HSDPA.
  * @MBIM_DATA_CLASS_HSUPA: HSUPA.
  * @MBIM_DATA_CLASS_LTE: LTE.
+ * @MBIM_DATA_CLASS_5G_NSA: 5G NSA (MS MBIMEx v2.0). Since 1.28.
+ * @MBIM_DATA_CLASS_5G_SA: 5G SA (MS MBIMEx v2.0). Since 1.28.
  * @MBIM_DATA_CLASS_1XRTT: 1xRTT.
  * @MBIM_DATA_CLASS_1XEVDO: 1xEV-DO.
  * @MBIM_DATA_CLASS_1XEVDO_REVA: 1xEV-DO RevA
@@ -109,6 +111,13 @@ typedef enum { /*< since=1.0 >*/
  *
  * Data class.
  *
+ * Both 5G related values are introduced in MBIM Extension v2.0, but given
+ * the update is compatible with the original MBIM enumeration, devices may
+ * report them without having enabled MBIM Extension v2.0 support.
+ *
+ * This type is updated in MBIM Extension v3.0 in a non-backwards compatible
+ * way, see #MbimDataClassV3.
+ *
  * Since: 1.0
  */
 typedef enum { /*< since=1.0 >*/
@@ -118,7 +127,9 @@ typedef enum { /*< since=1.0 >*/
     MBIM_DATA_CLASS_HSDPA       = 1 << 3,
     MBIM_DATA_CLASS_HSUPA       = 1 << 4,
     MBIM_DATA_CLASS_LTE         = 1 << 5,
-    /* Bits 6 to 15 reserved for future 3GPP classes */
+    MBIM_DATA_CLASS_5G_NSA      = 1 << 6,
+    MBIM_DATA_CLASS_5G_SA       = 1 << 7,
+    /* Bits 8 to 15 reserved for future 3GPP classes */
     MBIM_DATA_CLASS_1XRTT       = 1 << 16,
     MBIM_DATA_CLASS_1XEVDO      = 1 << 17,
     MBIM_DATA_CLASS_1XEVDO_REVA = 1 << 18,
@@ -150,22 +161,30 @@ typedef enum { /*< since=1.0 >*/
 
 /**
  * MbimCtrlCaps:
+ * MBIM_CTRL_CAPS_NONE: None. Since 1.28.
  * @MBIM_CTRL_CAPS_REG_MANUAL: Device allows manual network selection.
  * @MBIM_CTRL_CAPS_HW_RADIO_SWITCH: Device has a hardware radio power switch.
  * @MBIM_CTRL_CAPS_CDMA_MOBILE_IP: The CDMA function supports Mobile IP.
  * @MBIM_CTRL_CAPS_CDMA_SIMPLE_IP: The CDMA function supports Simple IP.
  * @MBIM_CTRL_CAPS_MULTI_CARRIER: Device can work with multiple providers.
+ * @MBIM_CTRL_CAPS_ESIM: Device supports eSIM (MS MBIMEx v3.0). Since 1.28.
+ * @MBIM_CTRL_CAPS_UE_POLICY_ROUTE_SELECTION: Device supports including the route selection descriptors as part of the UE policies (MS MBIMEx v3.0). Since 1.28.
+ * @MBIM_CTRL_CAPS_SIM_HOT_SWAP_CAPABLE: Device supports SIM hot-swap (MS MBIMEx v3.0). Since 1.28.
  *
  * Control capabilities.
  *
  * Since: 1.0
  */
 typedef enum { /*< since=1.0 >*/
-    MBIM_CTRL_CAPS_REG_MANUAL      = 1 << 0,
-    MBIM_CTRL_CAPS_HW_RADIO_SWITCH = 1 << 1,
-    MBIM_CTRL_CAPS_CDMA_MOBILE_IP  = 1 << 2,
-    MBIM_CTRL_CAPS_CDMA_SIMPLE_IP  = 1 << 3,
-    MBIM_CTRL_CAPS_MULTI_CARRIER   = 1 << 4
+    MBIM_CTRL_CAPS_NONE                      = 0,
+    MBIM_CTRL_CAPS_REG_MANUAL                = 1 << 0,
+    MBIM_CTRL_CAPS_HW_RADIO_SWITCH           = 1 << 1,
+    MBIM_CTRL_CAPS_CDMA_MOBILE_IP            = 1 << 2,
+    MBIM_CTRL_CAPS_CDMA_SIMPLE_IP            = 1 << 3,
+    MBIM_CTRL_CAPS_MULTI_CARRIER             = 1 << 4,
+    MBIM_CTRL_CAPS_ESIM                      = 1 << 5,
+    MBIM_CTRL_CAPS_UE_POLICY_ROUTE_SELECTION = 1 << 6,
+    MBIM_CTRL_CAPS_SIM_HOT_SWAP_CAPABLE      = 1 << 7,
 } MbimCtrlCaps;
 
 /*****************************************************************************/
@@ -180,6 +199,8 @@ typedef enum { /*< since=1.0 >*/
  * @MBIM_SUBSCRIBER_READY_STATE_FAILURE: Failure.
  * @MBIM_SUBSCRIBER_READY_STATE_NOT_ACTIVATED: Not activated.
  * @MBIM_SUBSCRIBER_READY_STATE_DEVICE_LOCKED: Device locked.
+ * @MBIM_SUBSCRIBER_READY_STATE_NO_ESIM_PROFILE: The card is ready but does not
+ *  have any enabled profiles (MS MBIMEx). Since 1.28.
  *
  * Ready state of the subscriber.
  *
@@ -193,6 +214,7 @@ typedef enum { /*< since=1.0 >*/
     MBIM_SUBSCRIBER_READY_STATE_FAILURE          = 4,
     MBIM_SUBSCRIBER_READY_STATE_NOT_ACTIVATED    = 5,
     MBIM_SUBSCRIBER_READY_STATE_DEVICE_LOCKED    = 6,
+    MBIM_SUBSCRIBER_READY_STATE_NO_ESIM_PROFILE  = 7,
 } MbimSubscriberReadyState;
 
 /**
@@ -370,6 +392,25 @@ typedef enum { /*< since=1.2 >*/
 } MbimProviderState;
 
 /*****************************************************************************/
+/* Connect V3' enums */
+
+/**
+ * MbimAccessMediaType:
+ * @MBIM_ACCESS_MEDIA_TYPE_UNKNOWN: None, or unknown.
+ * @MBIM_ACCESS_MEDIA_TYPE_3GPP: 3GPP only.
+ * @MBIM_ACCESS_MEDIA_TYPE_3GPP_PREFERRED: 3GPP Preferred.
+ *
+ * Access type preference.
+ *
+ * Since: 1.28
+ */
+typedef enum { /*< since=1.28 >*/
+    MBIM_ACCESS_MEDIA_TYPE_UNKNOWN        = 0,
+    MBIM_ACCESS_MEDIA_TYPE_3GPP           = 1,
+    MBIM_ACCESS_MEDIA_TYPE_3GPP_PREFERRED = 2,
+} MbimAccessMediaType;
+
+/*****************************************************************************/
 /* 'Visible Providers' enums */
 
 /**
@@ -391,7 +432,7 @@ typedef enum { /*< since=1.2 >*/
 
 /**
  * MbimNwError:
- * @MBIM_NW_ERROR_UNKNOWN: Unknown or unset error.
+ * @MBIM_NW_ERROR_NONE: No error. Since 1.28.
  * @MBIM_NW_ERROR_IMSI_UNKNOWN_IN_HLR: IMSI unknown in the HLR.
  * @MBIM_NW_ERROR_ILLEGAL_MS: Illegal MS. Since 1.10.
  * @MBIM_NW_ERROR_IMSI_UNKNOWN_IN_VLR: IMSI unknown in the VLR.
@@ -443,7 +484,7 @@ typedef enum { /*< since=1.2 >*/
  * Since: 1.0
  */
 typedef enum { /*< since=1.0 >*/
-    MBIM_NW_ERROR_UNKNOWN                                                    = 0,
+    MBIM_NW_ERROR_NONE                                                       = 0,
     MBIM_NW_ERROR_IMSI_UNKNOWN_IN_HLR                                        = 2,
     MBIM_NW_ERROR_ILLEGAL_MS                                                 = 3,
     MBIM_NW_ERROR_IMSI_UNKNOWN_IN_VLR                                        = 4,
@@ -560,6 +601,24 @@ typedef enum { /*< since=1.0 >*/
     MBIM_REGISTRATION_FLAG_MANUAL_SELECTION_NOT_AVAILABLE  = 1 << 0,
     MBIM_REGISTRATION_FLAG_PACKET_SERVICE_AUTOMATIC_ATTACH = 1 << 1,
 } MbimRegistrationFlag;
+
+/*****************************************************************************/
+/* 'Wake Reason' enums */
+/**
+ * MbimWaketype:
+ * @MBIM_WAKE_TYPE_CID_RESPONSE: A CID response wakes device.
+ * @MBIM_WAKE_TYPE_CID_INDICATION: A CID indication wakes device.
+ * @MBIM_WAKE_TYPE_PACKET: An incoming packet wakes device.
+ *
+ * Wake type.
+ *
+ * Since: 1.28
+ */
+typedef enum { /*< since=1.28 >*/
+    MBIM_WAKE_TYPE_CID_RESPONSE   = 0,
+    MBIM_WAKE_TYPE_CID_INDICATION = 1,
+    MBIM_WAKE_TYPE_PACKET         = 2,
+} MbimWakeType;
 
 /*****************************************************************************/
 /* 'Packet Service' enums */
@@ -1447,6 +1506,304 @@ typedef enum { /*< since=1.26 >*/
     MBIM_UICC_PASS_THROUGH_STATUS_DISABLED   = 0,
     MBIM_UICC_PASS_THROUGH_STATUS_ENABLED    = 1,
 } MbimUiccPassThroughStatus;
+
+/*****************************************************************************/
+/* 'Modem Configuration' enums */
+
+/**
+ * MbimModemConfigurationStatus:
+ * @MBIM_MODEM_CONFIGURATION_STATUS_UNKNOWN: Unknown
+ * @MBIM_MODEM_CONFIGURATION_STATUS_STARTED: SIM is ready and configuration started.
+ * @MBIM_MODEM_CONFIGURATION_STATUS_COMPLETED: SIM is ready and configuration completed.
+ *
+ * Modem configuration status.
+ *
+ * Since: 1.28
+ */
+typedef enum {/*< since=1.28 >*/
+    MBIM_MODEM_CONFIGURATION_STATUS_UNKNOWN   = 0,
+    MBIM_MODEM_CONFIGURATION_STATUS_STARTED   = 1,
+    MBIM_MODEM_CONFIGURATION_STATUS_COMPLETED = 2
+} MbimModemConfigurationStatus;
+
+/*****************************************************************************/
+/* 'Packet service v2'  enums */
+
+/**
+ * MbimFrequencyRange:
+ * @MBIM_FREQUENCY_RANGE_UNKNOWN: Unknown.
+ * @MBIM_FREQUENCY_RANGE_1: Frequency range 1 (FR1) in 3GPP TS 38.101-1 (Sub-6G).
+ * @MBIM_FREQUENCY_RANGE_2: FR2 in 3GPP TS 38.101-2 (mmWave).
+ *
+ * Frequency Range.
+ *
+ * Since: 1.28
+ */
+typedef enum { /*< since=1.28 >*/
+    MBIM_FREQUENCY_RANGE_UNKNOWN = 0,
+    MBIM_FREQUENCY_RANGE_1       = 1 << 0,
+    MBIM_FREQUENCY_RANGE_2       = 1 << 1
+} MbimFrequencyRange;
+
+/*****************************************************************************/
+/* 'Provisioned Context v2' enums */
+
+/**
+ * MbimContextRoamingControl:
+ * @MBIM_CONTEXT_ROAMING_CONTROL_HOME_ONLY: Context allowed to be used in home network.
+ * @MBIM_CONTEXT_ROAMING_CONTROL_PARTNER_ONLY: Context allowed to be used in partner network.
+ * @MBIM_CONTEXT_ROAMING_CONTROL_NON_PARTNER_ONLY: Context allowed to be used in non-partner network.
+ * @MBIM_CONTEXT_ROAMING_CONTROL_HOME_AND_PARTNER: Context allowed to be used in home and partner networks.
+ * @MBIM_CONTEXT_ROAMING_CONTROL_HOME_AND_NON_PARTNER: Context allowed to be used in home and non-partner networks.
+ * @MBIM_CONTEXT_ROAMING_CONTROL_PARTNER_AND_NON_PARTNER: Context allowed to be used in partner and non-partner networks.
+ * @MBIM_CONTEXT_ROAMING_CONTROL_ALLOW_ALL: Context allowed to be used in any roaming condition.
+ *
+ * Type of roaming control.
+ *
+ * Since: 1.28
+ */
+typedef enum { /*< since=1.28 >*/
+    MBIM_CONTEXT_ROAMING_CONTROL_HOME_ONLY               = 0,
+    MBIM_CONTEXT_ROAMING_CONTROL_PARTNER_ONLY            = 1,
+    MBIM_CONTEXT_ROAMING_CONTROL_NON_PARTNER_ONLY        = 2,
+    MBIM_CONTEXT_ROAMING_CONTROL_HOME_AND_PARTNER        = 3,
+    MBIM_CONTEXT_ROAMING_CONTROL_HOME_AND_NON_PARTNER    = 4,
+    MBIM_CONTEXT_ROAMING_CONTROL_PARTNER_AND_NON_PARTNER = 5,
+    MBIM_CONTEXT_ROAMING_CONTROL_ALLOW_ALL               = 6
+} MbimContextRoamingControl;
+
+/**
+ * MbimContextMediaType:
+ * @MBIM_CONTEXT_MEDIA_TYPE_CELLULAR_ONLY: Context allowed to be used only wen registered over cellular.
+ * @MBIM_CONTEXT_MEDIA_TYPE_WIFI_ONLY: Context allowed to be used only when registered over Wi-Fi.
+ * @MBIM_CONTEXT_MEDIA_TYPE_ALL: Context allowed to be used when registered either over cellular or Wi-Fi.
+ *
+ * Media type, specifying whether the modem is used for cellular or
+ * iWLAN (Wi-Fi offload).
+ *
+ * Since: 1.28
+ */
+typedef enum { /*< since=1.28 >*/
+    MBIM_CONTEXT_MEDIA_TYPE_CELLULAR_ONLY = 0,
+    MBIM_CONTEXT_MEDIA_TYPE_WIFI_ONLY     = 1,
+    MBIM_CONTEXT_MEDIA_TYPE_ALL           = 2
+} MbimContextMediaType;
+
+/**
+ * MbimContextState:
+ * @MBIM_CONTEXT_STATE_DISABLED: Disabled.
+ * @MBIM_CONTEXT_STATE_ENABLED: Enabled.
+ *
+ * Status of the context, specifying whether it's enabled or disabled.
+ *
+ * Since: 1.28
+ */
+typedef enum { /*< since=1.28 >*/
+    MBIM_CONTEXT_STATE_DISABLED = 0,
+    MBIM_CONTEXT_STATE_ENABLED  = 1,
+} MbimContextState;
+
+/**
+ * MbimContextOperation:
+ * @MBIM_CONTEXT_OPERATION_DEFAULT: Adds or replaces an existing context.
+ * @MBIM_CONTEXT_OPERATION_DELETE: Delete an existing context.
+ * @MBIM_CONTEXT_OPERATION_RESTORE_FACTORY: Restore preconfigured contexts for the provider ID of the current SIM card.
+ *
+ * Command to run when updating context configuration.
+ *
+ * Since: 1.28
+ */
+typedef enum { /*< since=1.28 >*/
+    MBIM_CONTEXT_OPERATION_DEFAULT         = 0,
+    MBIM_CONTEXT_OPERATION_DELETE          = 1,
+    MBIM_CONTEXT_OPERATION_RESTORE_FACTORY = 2,
+} MbimContextOperation;
+
+/*****************************************************************************/
+/* 'Registration Parameters' enums */
+
+/**
+ * MbimMicoMode:
+ * @MBIM_MICO_MODE_DISABLED: Disabled.
+ * @MBIM_MICO_MODE_ENABLED: Enabled.
+ * @MBIM_MICO_MODE_UNSUPPORTED: Device does not support MICO mode.
+ * @MBIM_MICO_MODE_DEFAULT: Default.
+ *
+ * Mobile Initiated Connection Only (MICO) Mode state.
+ *
+ * The @MBIM_MICO_MODE_DEFAULT value should only be used in set operations, it
+ * should never be returned by the module upon a query.
+ *
+ * Since: 1.28
+ */
+typedef enum { /*< since=1.28 >*/
+    MBIM_MICO_MODE_DISABLED    = 0,
+    MBIM_MICO_MODE_ENABLED     = 1,
+    MBIM_MICO_MODE_UNSUPPORTED = 2,
+    MBIM_MICO_MODE_DEFAULT     = 3,
+} MbimMicoMode;
+
+/**
+ * MbimDefaultPduActivationHint:
+ * @MBIM_DEFAULT_PDU_ACTIVATION_HINT_UNLIKELY: Default PDU session activation is unlikely to happen soon.
+ * @MBIM_DEFAULT_PDU_ACTIVATION_HINT_LIKELY: Default PDU session activation is likely to happen soon.
+ *
+ * Hint regarding the activation of the default PDU session.
+ *
+ * Since: 1.28
+ */
+typedef enum { /*< since=1.28 >*/
+    MBIM_DEFAULT_PDU_ACTIVATION_HINT_UNLIKELY = 0,
+    MBIM_DEFAULT_PDU_ACTIVATION_HINT_LIKELY   = 1,
+} MbimDefaultPduActivationHint;
+
+/**
+ * MbimLadnInfo:
+ * @MBIM_LADN_INFO_NOT_NEEDED: Information not needed.
+ * @MBIM_LADN_INFO_REQUESTED: Information requested.
+ *
+ * Local Area Data Network (LADN) information state.
+ *
+ * Since: 1.28
+ */
+typedef enum { /*< since=1.28 >*/
+    MBIM_LADN_INFO_NOT_NEEDED = 0,
+    MBIM_LADN_INFO_REQUESTED  = 1,
+} MbimLadnInfo;
+
+/**
+ * MbimDrxCycle:
+ * @MBIM_DRX_CYCLE_NOT_SPECIFIED: DRX cycle not specified.
+ * @MBIM_DRX_CYCLE_NOT_SUPPORTED: DRX cycle setting not supported.
+ * @MBIM_DRX_CYCLE_32: DRX cycle T=32.
+ * @MBIM_DRX_CYCLE_64: DRX cycle T=64.
+ * @MBIM_DRX_CYCLE_128: DRX cycle T=128.
+ * @MBIM_DRX_CYCLE_256: DRX cycle T=256.
+ *
+ * DRX cycle settings.
+ *
+ * Since: 1.28
+ */
+typedef enum { /*< since=1.28 >*/
+    MBIM_DRX_CYCLE_NOT_SPECIFIED = 0,
+    MBIM_DRX_CYCLE_NOT_SUPPORTED = 1,
+    MBIM_DRX_CYCLE_32            = 2,
+    MBIM_DRX_CYCLE_64            = 3,
+    MBIM_DRX_CYCLE_128           = 4,
+    MBIM_DRX_CYCLE_256           = 5,
+} MbimDrxCycle;
+
+/*****************************************************************************/
+/* 'Subscriber Ready Status v3' enums */
+
+/**
+ * MbimSubscriberReadyStatusFlag:
+ * @MBIM_SUBSCRIBER_READY_STATUS_FLAG_NONE: None.
+ * @MBIM_SUBSCRIBER_READY_STATUS_FLAG_ESIM: Whether the SIM is an eSIM or not.
+ * @MBIM_SUBSCRIBER_READY_STATUS_FLAG_SIM_REMOVABILITY_KNOWN: Whether the SIM removability details are know or not.
+ * @MBIM_SUBSCRIBER_READY_STATUS_FLAG_SIM_REMOVABLE: Whether the SIM is removable or not, valid only if @MBIM_SUBSCRIBER_READY_STATUS_FLAG_SIM_REMOVABLITY_KNOWN is also given.
+ *
+ * Flags specifying SIM related details.
+ *
+ * Since: 1.28
+ */
+typedef enum { /*< since=1.28 >*/
+    MBIM_SUBSCRIBER_READY_STATUS_FLAG_NONE                   = 0,
+    MBIM_SUBSCRIBER_READY_STATUS_FLAG_ESIM                   = 1 << 0,
+    MBIM_SUBSCRIBER_READY_STATUS_FLAG_SIM_REMOVABILITY_KNOWN = 1 << 1,
+    MBIM_SUBSCRIBER_READY_STATUS_FLAG_SIM_REMOVABLE          = 1 << 2,
+} MbimSubscriberReadyStatusFlag;
+
+/*****************************************************************************/
+/* 'Device Caps v3' and 'Base Stations Info v3' enums */
+
+/**
+ * MbimDataClassV3:
+ * @MBIM_DATA_CLASS_V3_GPRS: GPRS.
+ * @MBIM_DATA_CLASS_V3_EDGE: EDGE.
+ * @MBIM_DATA_CLASS_V3_UMTS: UMTS.
+ * @MBIM_DATA_CLASS_V3_HSDPA: HSDPA.
+ * @MBIM_DATA_CLASS_V3_HSUPA: HSUPA.
+ * @MBIM_DATA_CLASS_V3_LTE: LTE.
+ * @MBIM_DATA_CLASS_V3_5G: 5G.
+ * @MBIM_DATA_CLASS_V3_1XRTT: 1xRTT.
+ * @MBIM_DATA_CLASS_V3_1XEVDO: 1xEV-DO.
+ * @MBIM_DATA_CLASS_V3_1XEVDO_REVA: 1xEV-DO RevA
+ * @MBIM_DATA_CLASS_V3_1XEVDV: 1xEV-DV.
+ * @MBIM_DATA_CLASS_V3_3XRTT: 3xRTT.
+ * @MBIM_DATA_CLASS_V3_1XEVDO_REVB: 1xEV-DO RevB.
+ * @MBIM_DATA_CLASS_V3_UMB: UMB.
+ * @MBIM_DATA_CLASS_V3_CUSTOM: Custom.
+ *
+ * Data class update in MBIMEx v3.0.
+ *
+ * There is now a single flag for 5G, and the new #MbimDataSubclass helps to
+ * identify the specific 5G setup.
+ *
+ * This type should be considered incompatible with #MbimDataClass.
+ *
+ * Since: 1.28
+ */
+typedef enum { /*< since=1.28 >*/
+    MBIM_DATA_CLASS_V3_GPRS        = 1 << 0,
+    MBIM_DATA_CLASS_V3_EDGE        = 1 << 1,
+    MBIM_DATA_CLASS_V3_UMTS        = 1 << 2,
+    MBIM_DATA_CLASS_V3_HSDPA       = 1 << 3,
+    MBIM_DATA_CLASS_V3_HSUPA       = 1 << 4,
+    MBIM_DATA_CLASS_V3_LTE         = 1 << 5,
+    MBIM_DATA_CLASS_V3_5G          = 1 << 6,
+    /* Bit 7 unused, bits 8 to 15 reserved for future 3GPP classes */
+    MBIM_DATA_CLASS_V3_1XRTT       = 1 << 16,
+    MBIM_DATA_CLASS_V3_1XEVDO      = 1 << 17,
+    MBIM_DATA_CLASS_V3_1XEVDO_REVA = 1 << 18,
+    MBIM_DATA_CLASS_V3_1XEVDV      = 1 << 19,
+    MBIM_DATA_CLASS_V3_3XRTT       = 1 << 20,
+    MBIM_DATA_CLASS_V3_1XEVDO_REVB = 1 << 21,
+    MBIM_DATA_CLASS_V3_UMB         = 1 << 22,
+    /* Bits 23 to 30 reserved for future 3GPP2 classes */
+    MBIM_DATA_CLASS_V3_CUSTOM      = 1 << 31
+} MbimDataClassV3;
+
+/**
+ * MbimDataSubclass:
+ * @MBIM_DATA_SUBCLASS_NONE: No data subclass.
+ * @MBIM_DATA_SUBCLASS_5G_ENDC: EUTRAN and NR dual connectivity as in 5G option 3.
+ * @MBIM_DATA_SUBCLASS_5G_NR: Standalone NR as in 5G option 2.
+ * @MBIM_DATA_SUBCLASS_5G_NEDC: NR and EUTRAN dual connectivity as in 5G option 4.
+ * @MBIM_DATA_SUBCLASS_5G_ELTE: eLTE as in 5G option 5.
+ * @MBIM_DATA_SUBCLASS_5G_NGENDC: Next-gen eLTE and NR dual connectivity as in 5G option 7.
+ *
+ * Flags specifying the data subclass.
+ *
+ * Since: 1.28
+ */
+typedef enum { /*< since=1.28 >*/
+    MBIM_DATA_SUBCLASS_NONE      = 0,
+    MBIM_DATA_SUBCLASS_5G_ENDC   = 1 << 0,
+    MBIM_DATA_SUBCLASS_5G_NR     = 1 << 1,
+    MBIM_DATA_SUBCLASS_5G_NEDC   = 1 << 2,
+    MBIM_DATA_SUBCLASS_5G_ELTE   = 1 << 3,
+    MBIM_DATA_SUBCLASS_5G_NGENDC = 1 << 4,
+} MbimDataSubclass;
+
+/*****************************************************************************/
+/* 'Quectel Radio State' enums */
+
+/**
+ * MbimQuectelRadioSwitchState:
+ * @MBIM_QUECTEL_RADIO_SWITCH_STATE_OFF: Radio is off.
+ * @MBIM_QUECTEL_RADIO_SWITCH_STATE_ON: Radio is on.
+ * @MBIM_QUECTEL_RADIO_SWITCH_STATE_FCC_LOCKED: Radio is FCC locked.
+ *
+ * Radio switch state.
+ *
+ * Since: 1.26.2
+ */
+typedef enum { /*< since=1.26.2 >*/
+    MBIM_QUECTEL_RADIO_SWITCH_STATE_OFF        = 0,
+    MBIM_QUECTEL_RADIO_SWITCH_STATE_ON         = 1,
+    MBIM_QUECTEL_RADIO_SWITCH_STATE_FCC_LOCKED = 4,
+} MbimQuectelRadioSwitchState;
 
 G_END_DECLS
 
