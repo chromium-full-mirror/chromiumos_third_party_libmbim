@@ -561,7 +561,7 @@ void mbim_device_add_link (MbimDevice          *self,
 
 /**
  * mbim_device_add_link_finish:
- * @self: a #QmiDevice.
+ * @self: a #MbimDevice.
  * @res: a #GAsyncResult.
  * @session_id: the session ID for the link created.
  * @error: Return location for error or %NULL.
@@ -670,6 +670,9 @@ gboolean mbim_device_delete_all_links_finish (MbimDevice    *self,
  * @out_links: (out)(transfer full)(element-type utf8): a placeholder for the
  *   output #GPtrArray of link names.
  * @error: Return location for error or %NULL.
+ *
+ * Synchronously lists all virtual network interfaces that have been previously
+ * created with mbim_device_add_link() in @base_ifname.
  *
  * Returns: %TRUE if successful, %FALSE if @error is set.
  *

@@ -161,7 +161,7 @@ typedef enum { /*< since=1.0 >*/
 
 /**
  * MbimCtrlCaps:
- * MBIM_CTRL_CAPS_NONE: None. Since 1.28.
+ * @MBIM_CTRL_CAPS_NONE: None. Since 1.28.
  * @MBIM_CTRL_CAPS_REG_MANUAL: Device allows manual network selection.
  * @MBIM_CTRL_CAPS_HW_RADIO_SWITCH: Device has a hardware radio power switch.
  * @MBIM_CTRL_CAPS_CDMA_MOBILE_IP: The CDMA function supports Mobile IP.
@@ -605,7 +605,7 @@ typedef enum { /*< since=1.0 >*/
 /*****************************************************************************/
 /* 'Wake Reason' enums */
 /**
- * MbimWaketype:
+ * MbimWakeType:
  * @MBIM_WAKE_TYPE_CID_RESPONSE: A CID response wakes device.
  * @MBIM_WAKE_TYPE_CID_INDICATION: A CID indication wakes device.
  * @MBIM_WAKE_TYPE_PACKET: An incoming packet wakes device.
@@ -1216,6 +1216,36 @@ typedef enum { /*< since=1.26 >*/
 typedef enum { /*< since=1.26 >*/
     MBIM_QDU_FILE_TYPE_LITTLE_ENDIAN_PACKAGE = 0,
 } MbimQduFileType;
+
+/*****************************************************************************/
+/* 'QDU Quectel Reboot' enums */
+
+/**
+ * MbimQduQuectelRebootType:
+ * @MBIM_QDU_QUECTEL_REBOOT_TYPE_EDL: Reboot to Emergency Download mode
+ *
+ * QDU Quectel Reboot session type.
+ *
+ * Since: 1.28
+ */
+typedef enum { /*< since=1.28 >*/
+    MBIM_QDU_QUECTEL_REBOOT_TYPE_EDL = 17,
+} MbimQduQuectelRebootType;
+
+/*****************************************************************************/
+/* 'QDU Quectel Version' enums */
+
+/**
+ * MbimQduQuectelVersionType:
+ * @MBIM_QDU_QUECTEL_VERSION_TYPE_FW_BUILD_ID: Firmware Build ID
+ *
+ * QDU Quectel Read Version session type.
+ *
+ * Since: 1.28
+ */
+typedef enum { /*< since=1.28 >*/
+    MBIM_QDU_QUECTEL_VERSION_TYPE_FW_BUILD_ID = 256,
+} MbimQduQuectelVersionType;
 
 /*****************************************************************************/
 /* 'ATDS RAT' enums */

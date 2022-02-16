@@ -16,7 +16,12 @@ class Struct:
     """
     Constructor
     """
-    def __init__(self, dictionary):
+    def __init__(self, service, mbimex_service, mbimex_version, dictionary):
+        # The message service, e.g. "Basic Connect"
+        self.service = service
+        self.mbimex_service = mbimex_service
+        self.mbimex_version = mbimex_version
+
         self.name = dictionary['name']
         self.contents = dictionary['contents']
         self.since = dictionary['since'] if 'since' in dictionary else None
@@ -79,7 +84,7 @@ class Struct:
                 if 'public-format' in field:
                     translations['public'] = field['public-format']
                     inner_template = (
-                        ' * @${field_name_underscore}: a ${public} given as a #guint16.\n')
+                        ' * @${field_name_underscore}: a #${public} given as a #guint16.\n')
                 else:
                     inner_template = (
                         ' * @${field_name_underscore}: a #guint16.\n')
@@ -87,7 +92,7 @@ class Struct:
                 if 'public-format' in field:
                     translations['public'] = field['public-format']
                     inner_template = (
-                        ' * @${field_name_underscore}: a ${public} given as a #guint32.\n')
+                        ' * @${field_name_underscore}: a #${public} given as a #guint32.\n')
                 else:
                     inner_template = (
                         ' * @${field_name_underscore}: a #guint32.\n')
@@ -101,7 +106,7 @@ class Struct:
                 if 'public-format' in field:
                     translations['public'] = field['public-format']
                     inner_template = (
-                        ' * @${field_name_underscore}: a ${public} given as a #guint64.\n')
+                        ' * @${field_name_underscore}: a #${public} given as a #guint64.\n')
                 else:
                     inner_template = (
                         ' * @${field_name_underscore}: a #guint64.\n')
@@ -128,6 +133,8 @@ class Struct:
             template += string.Template(inner_template).substitute(translations)
 
         template += (
+            ' *\n'
+            ' * A ${name} element.\n'
             ' *\n'
             ' * Since: ${since}\n'
             ' */\n'
@@ -1086,13 +1093,13 @@ class Struct:
         template = (
             '<SUBSECTION ${struct_name}>\n'
             '${struct_name}\n')
-        if self.struct_array_member == True or self.ref_struct_array_member == True:
+        if self.struct_array_member == True or self.ref_struct_array_member == True or self.ms_struct_array_member == True:
             template += (
                 '${struct_name}Array\n')
         if self.single_member == True:
             template += (
                 '${name_underscore}_free\n')
-        if self.struct_array_member == True or self.ref_struct_array_member == True:
+        if self.struct_array_member == True or self.ref_struct_array_member == True or self.ms_struct_array_member == True:
             template += (
                 '${name_underscore}_array_free\n')
         sfile.write(string.Template(template).substitute(translations))

@@ -131,9 +131,14 @@ typedef int MbimDeprecatedCidMsBasicConnectExtensions;
  * @compression: a #guint32.
  * @auth_protocol: a #guint32.
  *
+ * LTE attach status information.
+ *
  * Since: 1.18
  * Deprecated: 1.26
  */
+
+/* The following type exists just so that we don't getdeprecation warnings on
+ * our own methods */
 typedef struct {
     guint32 lte_attach_state;
     guint32 ip_type;
@@ -142,7 +147,10 @@ typedef struct {
     gchar *password;
     guint32 compression;
     guint32 auth_protocol;
-} MbimLteAttachStatus;
+} MbimDeprecatedLteAttachStatus;
+
+G_DEPRECATED
+typedef MbimDeprecatedLteAttachStatus MbimLteAttachStatus;
 
 /**
  * mbim_lte_attach_status_free:
@@ -154,8 +162,21 @@ typedef struct {
  * Deprecated: 1.26
  */
 G_DEPRECATED
-void mbim_lte_attach_status_free (MbimLteAttachStatus *var);
+void mbim_lte_attach_status_free (MbimDeprecatedLteAttachStatus *var);
+
+#if defined(__clang__)
+# pragma clang diagnostic push
+# pragma clang diagnostic ignored "-Wdeprecated-declarations"
+#elif defined(__GNUC__)
+# pragma GCC diagnostic push
+# pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#endif
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (MbimLteAttachStatus, mbim_lte_attach_status_free)
+#if defined(__clang__)
+# pragma clang diagnostic pop
+#elif defined(__GNUC__)
+# pragma GCC diagnostic pop
+#endif
 
 /**
  * mbim_message_ms_basic_connect_extensions_lte_attach_status_query_new:
@@ -188,7 +209,7 @@ MbimMessage *mbim_message_ms_basic_connect_extensions_lte_attach_status_query_ne
 G_DEPRECATED_FOR (mbim_message_ms_basic_connect_extensions_lte_attach_info_response_parse)
 gboolean mbim_message_ms_basic_connect_extensions_lte_attach_status_response_parse (
     const MbimMessage *message,
-    MbimLteAttachStatus **out_lte_attach_status,
+    MbimDeprecatedLteAttachStatus **out_lte_attach_status,
     GError **error);
 
 /**
@@ -207,7 +228,7 @@ gboolean mbim_message_ms_basic_connect_extensions_lte_attach_status_response_par
 G_DEPRECATED_FOR (mbim_message_ms_basic_connect_extensions_lte_attach_info_notification_parse)
 gboolean mbim_message_ms_basic_connect_extensions_lte_attach_status_notification_parse (
     const MbimMessage *message,
-    MbimLteAttachStatus **out_lte_attach_status,
+    MbimDeprecatedLteAttachStatus **out_lte_attach_status,
     GError **error);
 
 /*****************************************************************************/
@@ -215,7 +236,7 @@ gboolean mbim_message_ms_basic_connect_extensions_lte_attach_status_notification
 
 /* The following type exists just so that we can get deprecation warnings */
 G_DEPRECATED
-typedef int MbimNwErrorDeprecated;
+typedef int MbimDeprecatedNwError;
 
 /**
  * MBIM_NW_ERROR_UNKNOWN:
@@ -225,10 +246,14 @@ typedef int MbimNwErrorDeprecated;
  * Since: 1.0
  * Deprecated: 1.28: Use %MBIM_NW_ERROR_NONE instead.
  */
-#define MBIM_NW_ERROR_UNKNOWN (MbimNwErrorDeprecated) MBIM_NW_ERROR_NONE
+#define MBIM_NW_ERROR_UNKNOWN (MbimDeprecatedNwError) MBIM_NW_ERROR_NONE
 
 /*****************************************************************************/
 /* Rename blacklist to denylist */
+
+/* The following type exists just so that we can get deprecation warnings */
+G_DEPRECATED
+typedef int MbimDeprecatedCidMsBasicConnectExtensions;
 
 /**
  * MBIM_CID_MS_BASIC_CONNECT_EXTENSIONS_NETWORK_BLACKLIST:

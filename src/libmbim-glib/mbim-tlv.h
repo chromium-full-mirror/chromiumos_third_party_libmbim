@@ -75,7 +75,7 @@ GType mbim_tlv_get_type (void) G_GNUC_CONST;
  *
  * Since: 1.28
  */
-typedef enum {
+typedef enum { /*< since=1.28 >*/
     MBIM_TLV_TYPE_INVALID                     = 0,
     MBIM_TLV_TYPE_UE_POLICITES                = 1,
     MBIM_TLV_TYPE_SINGLE_NSSAI                = 2,
@@ -264,6 +264,7 @@ gboolean mbim_tlv_guint16_array_get (const MbimTlv  *self,
  * @payload: (out)(optional)(transfer full)(type guint8): return location for a
  *  newly allocated array of #guint8 values, or %NULL if the field is not
  *  needed. Free the returned value with g_free().
+ * @error: return location for error or %NULL.
  *
  * Get the contents of a wake command TLV.
  *
@@ -296,6 +297,7 @@ gboolean mbim_tlv_wake_command_get (const MbimTlv   *self,
  * @packet: (out)(optional)(transfer full)(type guint8): return location for a
  *  newly allocated array of #guint8 values, or %NULL if the field is not
  *  needed. Free the returned value with g_free().
+ * @error: return location for error or %NULL.
  *
  * Get the contents of a wake packet TLV.
  *
