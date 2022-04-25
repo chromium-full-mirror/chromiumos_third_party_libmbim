@@ -36,6 +36,8 @@
 #include "mbim-ms-basic-connect-extensions.h"
 #include "mbim-ms-uicc-low-level-access.h"
 #include "mbim-quectel.h"
+#include "mbim-intel-thermal-rf.h"
+#include "mbim-ms-voice-extensions.h"
 
 /*****************************************************************************/
 
@@ -1921,7 +1923,15 @@ mbim_message_get_printable_full (const MbimMessage  *self,
             fields_printable = __mbim_message_atds_get_printable_fields (self, line_prefix, &inner_error);
             break;
         case MBIM_SERVICE_INTEL_FIRMWARE_UPDATE:
-            fields_printable = __mbim_message_intel_firmware_update_get_printable_fields (self, line_prefix, &inner_error);
+            if (mbimex_version_major < 2)
+                fields_printable = __mbim_message_intel_firmware_update_get_printable_fields (self, line_prefix, &inner_error);
+            else if (mbimex_version_major >= 2) {
+                fields_printable = __mbim_message_intel_firmware_update_v2_get_printable_fields (self, line_prefix, &inner_error);
+                if (g_error_matches (inner_error, MBIM_CORE_ERROR, MBIM_CORE_ERROR_UNSUPPORTED)) {
+                    g_clear_error (&inner_error);
+                    fields_printable = __mbim_message_intel_firmware_update_get_printable_fields (self, line_prefix, &inner_error);
+                }
+            }
             break;
         case MBIM_SERVICE_QDU:
             fields_printable = __mbim_message_qdu_get_printable_fields (self, line_prefix, &inner_error);
@@ -1956,6 +1966,12 @@ mbim_message_get_printable_full (const MbimMessage  *self,
             break;
         case MBIM_SERVICE_QUECTEL:
             fields_printable = __mbim_message_quectel_get_printable_fields (self, line_prefix, &inner_error);
+            break;
+        case MBIM_SERVICE_INTEL_THERMAL_RF:
+            fields_printable = __mbim_message_intel_thermal_rf_get_printable_fields (self, line_prefix, &inner_error);
+            break;
+        case MBIM_SERVICE_MS_VOICE_EXTENSIONS:
+            fields_printable = __mbim_message_ms_voice_extensions_get_printable_fields (self, line_prefix, &inner_error);
             break;
         case MBIM_SERVICE_INVALID:
         case MBIM_SERVICE_LAST:

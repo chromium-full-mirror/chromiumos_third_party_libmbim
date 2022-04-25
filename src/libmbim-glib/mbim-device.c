@@ -42,6 +42,10 @@
 #include "mbim-basic-connect.h"
 #include "mbim-ms-basic-connect-extensions.h"
 
+/* maximum number of printed data bytes when personal info
+ * should be hidden */
+#define MAX_PRINTED_BYTES 12
+
 static void async_initable_iface_init (GAsyncInitableIface *iface);
 
 G_DEFINE_TYPE_EXTENDED (MbimDevice, mbim_device, G_TYPE_OBJECT, 0,
@@ -874,9 +878,17 @@ process_message (MbimDevice        *self,
     if (mbim_utils_get_traces_enabled ()) {
         g_autofree gchar *printable = NULL;
 
-        printable = mbim_common_str_hex (((GByteArray *)message)->data,
-                                         ((GByteArray *)message)->len,
-                                         ':');
+        if (mbim_utils_get_show_personal_info () || (((GByteArray *)message)->len < MAX_PRINTED_BYTES)) {
+            printable = mbim_common_str_hex (((GByteArray *)message)->data,
+                                             ((GByteArray *)message)->len,
+                                             ':');
+        } else {
+            g_autofree gchar *tmp = NULL;
+
+            tmp = mbim_common_str_hex (((GByteArray *)message)->data, MAX_PRINTED_BYTES, ':');
+            printable = g_strdup_printf ("%s...", tmp);
+        }
+
         g_debug ("[%s] Received message...%s\n"
                  ">>>>>> RAW:\n"
                  ">>>>>>   length = %u\n"
@@ -2350,7 +2362,15 @@ device_send (MbimDevice   *self,
         g_autofree gchar *hex = NULL;
         g_autofree gchar *printable = NULL;
 
-        hex = mbim_common_str_hex (raw_message, raw_message_len, ':');
+        if (mbim_utils_get_show_personal_info () || (raw_message_len < MAX_PRINTED_BYTES)) {
+            hex = mbim_common_str_hex (raw_message, raw_message_len, ':');
+        } else {
+            g_autofree gchar *tmp = NULL;
+
+            tmp = mbim_common_str_hex (raw_message, MAX_PRINTED_BYTES, ':');
+            hex = g_strdup_printf ("%s...", tmp);
+        }
+
         g_debug ("[%s] Sent message...\n"
                  "<<<<<< RAW:\n"
                  "<<<<<<   length = %u\n"

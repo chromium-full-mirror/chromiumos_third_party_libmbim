@@ -43,6 +43,7 @@ static gchar *no_open_str;
 static gboolean no_close_flag;
 static gboolean noop_flag;
 static gboolean verbose_flag;
+static gboolean verbose_full_flag;
 static gboolean silent_flag;
 static gboolean version_flag;
 
@@ -77,6 +78,10 @@ static GOptionEntry main_entries[] = {
     },
     { "verbose", 'v', 0, G_OPTION_ARG_NONE, &verbose_flag,
       "Run action with verbose logs, including the debug ones",
+      NULL
+    },
+    { "verbose-full", 0, 0, G_OPTION_ARG_NONE, &verbose_full_flag,
+      "Run action with verbose logs, including the debug ones and personal info",
       NULL
     },
     { "silent", 0, 0, G_OPTION_ARG_NONE, &silent_flag,
@@ -161,7 +166,7 @@ log_handler (const gchar *log_domain,
         g_assert_not_reached ();
     }
 
-    if (!verbose_flag && !err)
+    if (!verbose_flag && !verbose_full_flag && !err)
         return;
 
     g_fprintf (err ? stderr : stdout,
@@ -297,6 +302,12 @@ device_open_ready (MbimDevice   *dev,
     case MBIM_SERVICE_QUECTEL:
         mbimcli_quectel_run (dev, cancellable);
         return;
+    case MBIM_SERVICE_INTEL_THERMAL_RF:
+        mbimcli_intel_thermal_rf_run (dev, cancellable);
+        return;
+    case MBIM_SERVICE_MS_VOICE_EXTENSIONS:
+        mbimcli_ms_voice_extensions_run (dev, cancellable);
+        return;
     case MBIM_SERVICE_SMS:
     case MBIM_SERVICE_USSD:
     case MBIM_SERVICE_STK:
@@ -419,6 +430,16 @@ parse_actions (void)
         actions_enabled++;
     }
 
+    if (mbimcli_intel_thermal_rf_options_enabled ()) {
+        service = MBIM_SERVICE_INTEL_THERMAL_RF;
+        actions_enabled++;
+    }
+
+    if (mbimcli_ms_voice_extensions_options_enabled ()) {
+        service = MBIM_SERVICE_MS_VOICE_EXTENSIONS;
+        actions_enabled++;
+    }
+
     /* Noop */
     if (noop_flag)
         actions_enabled++;
@@ -464,6 +485,8 @@ int main (int argc, char **argv)
     g_option_context_add_group (context, mbimcli_ms_basic_connect_extensions_get_option_group ());
     g_option_context_add_group (context, mbimcli_quectel_get_option_group ());
     g_option_context_add_group (context, mbimcli_link_management_get_option_group ());
+    g_option_context_add_group (context, mbimcli_intel_thermal_rf_get_option_group ());
+    g_option_context_add_group (context, mbimcli_ms_voice_extensions_get_option_group ());
     g_option_context_add_main_entries (context, main_entries, NULL);
     if (!g_option_context_parse (context, &argc, &argv, &error)) {
         g_printerr ("error: %s\n", error->message);
@@ -475,8 +498,17 @@ int main (int argc, char **argv)
 
     g_log_set_handler (NULL, G_LOG_LEVEL_MASK, log_handler, NULL);
     g_log_set_handler ("Mbim", G_LOG_LEVEL_MASK, log_handler, NULL);
-    if (verbose_flag)
+
+    if (verbose_flag && verbose_full_flag) {
+        g_printerr ("error: cannot specify --verbose and --verbose-full at the same time\n");
+        exit (EXIT_FAILURE);
+    } else if (verbose_flag) {
         mbim_utils_set_traces_enabled (TRUE);
+        mbim_utils_set_show_personal_info (FALSE);
+    } else if (verbose_full_flag) {
+        mbim_utils_set_traces_enabled (TRUE);
+        mbim_utils_set_show_personal_info (TRUE);
+    }
 
     /* No device path given? */
     if (!device_str) {

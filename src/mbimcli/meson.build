@@ -7,10 +7,12 @@ mbimcli_sources = files(
   'mbimcli.c',
   'mbimcli-dss.c',
   'mbimcli-intel-firmware-update.c',
+  'mbimcli-intel-thermal-rf.c',
   'mbimcli-ms-basic-connect-extensions.c',
   'mbimcli-ms-firmware-id.c',
   'mbimcli-ms-host-shutdown.c',
   'mbimcli-ms-sar.c',
+  'mbimcli-ms-voice-extensions.c',
   'mbimcli-phonebook.c',
   'mbimcli-quectel.c',
 )

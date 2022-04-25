@@ -407,6 +407,34 @@ typedef enum { /*< since=1.26.2 >*/
 } MbimCidQuectel;
 
 /**
+ * MbimCidIntelThermalRf:
+ * @MBIM_CID_INTEL_THERMAL_RF_UNKNOWN: Unknown command.
+ * @MBIM_CID_INTEL_THERMAL_RF_RFIM: RFIM frequency command.
+ *
+ * MBIM commands in the %MBIM_SERVICE_INTEL_THERMAL_RF service.
+ *
+ * Since: 1.28
+ */
+typedef enum { /*< since=1.28 >*/
+    MBIM_CID_INTEL_THERMAL_RF_UNKNOWN     = 0,
+    MBIM_CID_INTEL_THERMAL_RF_RFIM        = 9,
+} MbimCidIntelThermalRf;
+
+/**
+ * MbimCidMsVoiceExtensions:
+ * @MBIM_CID_MS_VOICE_EXTENSIONS_UNKNOWN: Unknown command.
+ * @MBIM_CID_MS_VOICE_EXTENSIONS_NITZ: Network Identity and Time Zone information command.
+ *
+ * MBIM commands in the %MBIM_SERVICE_MS_VOICE_EXTENSIONS service.
+ *
+ * Since: 1.28
+ */
+typedef enum { /*< since=1.28 >*/
+    MBIM_CID_MS_VOICE_EXTENSIONS_UNKNOWN = 0,
+    MBIM_CID_MS_VOICE_EXTENSIONS_NITZ    = 10,
+} MbimCidMsVoiceExtensions;
+
+/**
  * mbim_cid_can_set:
  * @service: a #MbimService.
  * @cid: a command ID.

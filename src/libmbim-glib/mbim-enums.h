@@ -1835,6 +1835,54 @@ typedef enum { /*< since=1.26.2 >*/
     MBIM_QUECTEL_RADIO_SWITCH_STATE_FCC_LOCKED = 4,
 } MbimQuectelRadioSwitchState;
 
+/*****************************************************************************/
+/* 'Serving Cell Information' */
+
+/**
+ * MbimIntelServingCellInfo:
+ * @MBIM_INTEL_SERVING_CELL_INFO_PCELL: Primary cell.
+ * @MBIM_INTEL_SERVING_CELL_INFO_SCELL: Secondary cell.
+ * @MBIM_INTEL_SERVING_CELL_INFO_PSCELL: Primary cell in SCS.
+ * @MBIM_INTEL_SERVING_CELL_INFO_SSCELL: Secondary cell in SCS.
+ * @MBIM_INTEL_SERVING_CELL_INFO_RADIO_OFF: Radio state is off.
+ *
+ * Serving cell information.
+ *
+ * Since: 1.28
+ */
+typedef enum { /*< since=1.28 >*/
+    MBIM_INTEL_SERVING_CELL_INFO_PCELL     = 0,
+    MBIM_INTEL_SERVING_CELL_INFO_SCELL     = 1,
+    MBIM_INTEL_SERVING_CELL_INFO_PSCELL    = 2,
+    MBIM_INTEL_SERVING_CELL_INFO_SSCELL    = 3,
+    MBIM_INTEL_SERVING_CELL_INFO_RADIO_OFF = 0xFFFFFFFF,
+} MbimIntelServingCellInfo;
+
+/*****************************************************************************/
+/* 'Mbim Intel Boot Mode enums */
+
+/**
+ * MbimIntelBootMode:
+ * @MBIM_INTEL_BOOT_MODE_NORMAL_MODE: Normal boot mode.
+ * @MBIM_INTEL_BOOT_MODE_DOWNLOAD_MODE: Download boot mode.
+ * @MBIM_INTEL_BOOT_MODE_POWER_OFF_DEVICE: Power off device.
+ * @MBIM_INTEL_BOOT_MODE_NON_RESETABLE_REGISTER: Configure non-resetable register without reboot or power off.
+ * @MBIM_INTEL_BOOT_MODE_WITHOUT_REBOOT_POWER_OFF: Configure without reboot power-off.
+ * @MBIM_INTEL_BOOT_MODE_FAST_DOWNLOAD_MODE: Fast boot in download mode.
+ *
+ * Modem intel boot mode.
+ *
+ * Since: 1.28
+ */
+typedef enum { /*< since=1.28 >*/
+    MBIM_INTEL_BOOT_MODE_NORMAL_MODE              = 0,
+    MBIM_INTEL_BOOT_MODE_DOWNLOAD_MODE            = 1,
+    MBIM_INTEL_BOOT_MODE_POWER_OFF_DEVICE         = 2,
+    MBIM_INTEL_BOOT_MODE_NON_RESETABLE_REGISTER   = 3,
+    MBIM_INTEL_BOOT_MODE_WITHOUT_REBOOT_POWER_OFF = 4,
+    MBIM_INTEL_BOOT_MODE_FAST_DOWNLOAD_MODE       = 5,
+} MbimIntelBootMode;
+
 G_END_DECLS
 
 #endif /* _LIBMBIM_GLIB_MBIM_ENUMS_H_ */

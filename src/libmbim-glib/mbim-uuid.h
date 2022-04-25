@@ -111,6 +111,8 @@ gboolean mbim_uuid_from_printable (const gchar *str,
  * @MBIM_SERVICE_QDU: QDU firmware update service. Since 1.26.
  * @MBIM_SERVICE_MS_UICC_LOW_LEVEL_ACCESS: Microsoft UICC Low Level Access service. Since 1.26.
  * @MBIM_SERVICE_QUECTEL: Quectel specific operations. Since 1.26.2.
+ * @MBIM_SERVICE_INTEL_THERMAL_RF: Intel thermal rf related commands. Since 1.28
+ * @MBIM_SERVICE_MS_VOICE_EXTENSIONS: Microsoft Voice extensions service. Since 1.28.
  * @MBIM_SERVICE_LAST: Internal value.
  *
  * Enumeration of the generic MBIM services.
@@ -137,6 +139,8 @@ typedef enum { /*< since=1.0 >*/
     MBIM_SERVICE_QDU                         = 16,
     MBIM_SERVICE_MS_UICC_LOW_LEVEL_ACCESS    = 17,
     MBIM_SERVICE_QUECTEL                     = 18,
+    MBIM_SERVICE_INTEL_THERMAL_RF            = 19,
+    MBIM_SERVICE_MS_VOICE_EXTENSIONS         = 20,
 #if defined LIBMBIM_GLIB_COMPILATION
     MBIM_SERVICE_LAST /*< skip >*/
 #endif
@@ -350,6 +354,29 @@ typedef enum { /*< since=1.0 >*/
  * Since: 1.26.2
  */
 #define MBIM_UUID_QUECTEL mbim_uuid_from_service (MBIM_SERVICE_QUECTEL)
+
+/**
+ * MBIM_UUID_INTEL_THERMAL_RF:
+ *
+ * Get the UUID of the %MBIM_SERVICE_INTEL_THERMAL_RF service.
+ *
+ * Returns: (transfer none): a #MbimUuid.
+ *
+ * Since: 1.28
+ */
+#define MBIM_UUID_INTEL_THERMAL_RF mbim_uuid_from_service (MBIM_SERVICE_INTEL_THERMAL_RF)
+
+
+/**
+ * MBIM_UUID_MS_VOICE_EXTENSIONS:
+ *
+ * Get the UUID of the %MBIM_SERVICE_MS_VOICE_EXTENSIONS service.
+ *
+ * Returns: (transfer none): a #MbimUuid.
+ *
+ * Since: 1.28
+ */
+#define MBIM_UUID_MS_VOICE_EXTENSIONS mbim_uuid_from_service (MBIM_SERVICE_MS_VOICE_EXTENSIONS)
 
 /**
  * mbim_service_lookup_name:
