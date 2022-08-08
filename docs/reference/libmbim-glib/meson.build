@@ -12,8 +12,12 @@ src_dirs = [
 
 private_headers = [
   'mbim-helpers.h',
+  'mbim-helpers-netlink.h',
   'mbim-message-private.h',
   'mbim-net-port-manager.h',
+  'mbim-net-port-manager-wdm.h',
+  'mbim-net-port-manager-wwan.h',
+  'wwan.h',
 ]
 
 scan_args = [
