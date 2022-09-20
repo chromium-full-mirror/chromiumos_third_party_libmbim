@@ -60,6 +60,13 @@ static gboolean  query_packet_statistics_flag;
 static gchar    *query_ip_packet_filters_str;
 static gchar    *set_ip_packet_filters_str;
 static gboolean  query_provisioned_contexts_flag;
+static gchar    *set_provisioned_contexts_str;
+static gchar    *set_signal_state_str;
+static gchar    *set_network_idle_hint_str;
+static gboolean  query_network_idle_hint_flag;
+static gchar    *set_emergency_mode_str;
+static gboolean  query_emergency_mode_flag;
+static gchar    *set_service_activation_str;
 
 static gboolean query_connection_state_arg_parse (const char *option_name,
                                                   const char *value,
@@ -200,6 +207,34 @@ static GOptionEntry entries[] = {
       "Query provisioned contexts",
       NULL
     },
+    { "set-provisioned-contexts", 0, 0, G_OPTION_ARG_STRING, &set_provisioned_contexts_str,
+      "Set provisioned contexts (allowed keys: context-id, context-type, auth, compression, username, password, access-string, provider-id)",
+      "[\"key=value,...\"]"
+    },
+    { "set-signal-state", 0, 0, G_OPTION_ARG_STRING, &set_signal_state_str,
+      "Set signal state (allowed keys: signal-strength-interval, rssi-threshold, error-rate-threshold)",
+      "[\"key=value,...\"]"
+    },
+    { "set-network-idle-hint", 0, 0, G_OPTION_ARG_STRING, &set_network_idle_hint_str,
+      "Set network idle hint",
+      "[(enabled|disabled)]"
+    },
+    { "query-network-idle-hint", 0, 0, G_OPTION_ARG_NONE, &query_network_idle_hint_flag,
+      "Query network idle hint",
+      NULL
+    },
+    { "set-emergency-mode", 0, 0, G_OPTION_ARG_STRING, &set_emergency_mode_str,
+      "Set emergency mode",
+      "[(on|off)]"
+    },
+    { "query-emergency-mode", 0, 0, G_OPTION_ARG_NONE, &query_emergency_mode_flag,
+      "Query emergency mode",
+      NULL
+    },
+    { "set-service-activation", 0, 0, G_OPTION_ARG_STRING, &set_service_activation_str,
+      "Set service activation",
+      "[Data]"
+    },
     { NULL }
 };
 
@@ -295,7 +330,14 @@ mbimcli_basic_connect_options_enabled (void)
                  query_packet_statistics_flag +
                  !!query_ip_packet_filters_str +
                  !!set_ip_packet_filters_str +
-                 query_provisioned_contexts_flag);
+                 query_provisioned_contexts_flag +
+                 !!set_provisioned_contexts_str +
+                 !!set_signal_state_str +
+                 !!set_network_idle_hint_str +
+                 query_network_idle_hint_flag +
+                 !!set_emergency_mode_str +
+                 query_emergency_mode_flag +
+                 !!set_service_activation_str);
 
     if (n_actions > 1) {
         g_printerr ("error: too many Basic Connect actions requested\n");
@@ -2098,6 +2140,223 @@ provisioned_contexts_ready (MbimDevice   *device,
     shutdown (TRUE);
 }
 
+typedef struct {
+    guint             context_id;
+    MbimCompression   compression;
+    MbimAuthProtocol  auth_protocol;
+    MbimContextType   context_type;
+    gchar            *access_string;
+    gchar            *username;
+    gchar            *password;
+    gchar            *provider_id;
+} ProvisionedContextProperties;
+
+static void
+provisioned_context_properties_clear (ProvisionedContextProperties *props)
+{
+    g_free (props->access_string);
+    g_free (props->username);
+    g_free (props->password);
+    g_free (props->provider_id);
+}
+
+G_DEFINE_AUTO_CLEANUP_CLEAR_FUNC(ProvisionedContextProperties, provisioned_context_properties_clear)
+
+static gboolean
+set_provisioned_contexts_foreach_cb (const gchar                   *key,
+                                     const gchar                   *value,
+                                     GError                       **error,
+                                     ProvisionedContextProperties  *props)
+{
+    if (g_ascii_strcasecmp (key, "context-id") == 0) {
+        if (!mbimcli_read_uint_from_string (value, &props->context_id)) {
+            g_set_error (error, MBIM_CORE_ERROR, MBIM_CORE_ERROR_INVALID_ARGS,
+                         "Couldn't parse context-id as integer : '%s'", value);
+            return FALSE;
+        }
+    } else if (g_ascii_strcasecmp (key, "context-type") == 0) {
+        if (!mbimcli_read_context_type_from_string (value, &props->context_type)) {
+            g_set_error (error, MBIM_CORE_ERROR, MBIM_CORE_ERROR_INVALID_ARGS,
+                         "unknown context-type: '%s'", value);
+            return FALSE;
+        }
+    } else if (g_ascii_strcasecmp (key, "auth") == 0) {
+        if (!mbimcli_read_auth_protocol_from_string (value, &props->auth_protocol)) {
+            g_set_error (error, MBIM_CORE_ERROR, MBIM_CORE_ERROR_INVALID_ARGS,
+                         "unknown auth: '%s'", value);
+            return FALSE;
+        }
+    } else if (g_ascii_strcasecmp (key, "compression") == 0) {
+        if (!mbimcli_read_compression_from_string (value, &props->compression)) {
+            g_set_error (error, MBIM_CORE_ERROR, MBIM_CORE_ERROR_INVALID_ARGS,
+                         "unknown compression: '%s'", value);
+            return FALSE;
+        }
+    } else if (g_ascii_strcasecmp (key, "username") == 0) {
+        g_free (props->username);
+        props->username = g_strdup (value);
+    } else if (g_ascii_strcasecmp (key, "password") == 0) {
+        g_free (props->password);
+        props->password = g_strdup (value);
+    } else if (g_ascii_strcasecmp (key, "access-string") == 0) {
+        g_free (props->access_string);
+        props->access_string = g_strdup (value);
+    } else if (g_ascii_strcasecmp (key, "provider-id") == 0) {
+        g_free (props->provider_id);
+        props->provider_id = g_strdup (value);
+    } else {
+        g_set_error (error, MBIM_CORE_ERROR, MBIM_CORE_ERROR_FAILED,
+                     "unrecognized option '%s'", key);
+        return FALSE;
+    }
+
+    return TRUE;
+}
+
+typedef struct {
+    guint32  signal_strength;
+    guint32  rssi;
+    guint32  error_rate;
+} SignalStateProperties;
+
+static gboolean
+set_signal_state_foreach_cb (const gchar            *key,
+                             const gchar            *value,
+                             GError                **error,
+                             SignalStateProperties  *props)
+{
+    if (g_ascii_strcasecmp (key, "signal-strength-interval") == 0) {
+        if (!mbimcli_read_uint_from_string (value, &props->signal_strength)) {
+            g_set_error (error, MBIM_CORE_ERROR, MBIM_CORE_ERROR_INVALID_ARGS,
+                         "Couldn't parse signal-strength as integer : '%s'", value);
+            return FALSE;
+        }
+    } else if (g_ascii_strcasecmp (key, "rssi-threshold") == 0) {
+        if (!mbimcli_read_uint_from_string (value, &props->rssi)) {
+            g_set_error (error, MBIM_CORE_ERROR, MBIM_CORE_ERROR_INVALID_ARGS,
+                         "Couldn't parse rssi as integer : '%s'", value);
+            return FALSE;
+        }
+    } else if (g_ascii_strcasecmp (key, "error-rate-threshold") == 0) {
+        if (!mbimcli_read_uint_from_string (value, &props->error_rate)) {
+            g_set_error (error, MBIM_CORE_ERROR, MBIM_CORE_ERROR_INVALID_ARGS,
+                         "Couldn't parse error-rate as integer : '%s'", value);
+            return FALSE;
+        }
+    } else {
+        g_set_error (error, MBIM_CORE_ERROR, MBIM_CORE_ERROR_FAILED,
+                     "unrecognized option '%s'", key);
+        return FALSE;
+    }
+
+    return TRUE;
+}
+
+static void
+network_idle_hint_ready (MbimDevice   *device,
+                         GAsyncResult *res)
+{
+    g_autoptr(MbimMessage)    response = NULL;
+    g_autoptr(GError)         error = NULL;
+    MbimNetworkIdleHintState  network_state;
+    const gchar              *network_state_str = NULL;
+
+    response = mbim_device_command_finish (device, res, &error);
+    if (!response || !mbim_message_response_get_result (response, MBIM_MESSAGE_TYPE_COMMAND_DONE, &error)) {
+        g_printerr ("error: operation failed: %s\n", error->message);
+        shutdown (FALSE);
+        return;
+    }
+
+    if (!mbim_message_network_idle_hint_response_parse (
+            response,
+            &network_state,
+            &error)) {
+        g_printerr ("error: couldn't parse response message: %s\n", error->message);
+        shutdown (FALSE);
+        return;
+    }
+
+    network_state_str = mbim_network_idle_hint_state_get_string (network_state);
+    g_print ("[%s] Network idle hint state: '%s'\n",
+             mbim_device_get_path_display (device),
+             VALIDATE_UNKNOWN (network_state_str));
+
+    shutdown (TRUE);
+}
+
+static void
+emergency_mode_ready (MbimDevice   *device,
+                      GAsyncResult *res)
+{
+    g_autoptr(MbimMessage)  response = NULL;
+    g_autoptr(GError)       error = NULL;
+    MbimEmergencyModeState  emergency_state;
+    const gchar            *emergency_state_str = NULL;
+
+    response = mbim_device_command_finish (device, res, &error);
+    if (!response || !mbim_message_response_get_result (response, MBIM_MESSAGE_TYPE_COMMAND_DONE, &error)) {
+        g_printerr ("error: operation failed: %s\n", error->message);
+        shutdown (FALSE);
+        return;
+    }
+
+    if (!mbim_message_emergency_mode_response_parse (
+            response,
+            &emergency_state,
+            &error)) {
+        g_printerr ("error: couldn't parse response message: %s\n", error->message);
+        shutdown (FALSE);
+        return;
+    }
+
+    emergency_state_str = mbim_emergency_mode_state_get_string (emergency_state);
+    g_print ("[%s] Emergency mode: '%s'\n",
+             mbim_device_get_path_display (device),
+             VALIDATE_UNKNOWN (emergency_state_str));
+
+    shutdown (TRUE);
+}
+
+static void
+set_service_activation_ready (MbimDevice   *device,
+                              GAsyncResult *res)
+{
+    g_autoptr(MbimMessage)  response = NULL;
+    g_autoptr(GError)       error = NULL;
+    MbimNwError             nw_error;
+    guint32                 result_data_size;
+    const guint8           *result_data = NULL;
+    g_autofree gchar       *result_data_str = NULL;
+
+    response = mbim_device_command_finish (device, res, &error);
+    if (!response || !mbim_message_response_get_result (response, MBIM_MESSAGE_TYPE_COMMAND_DONE, &error)) {
+        g_printerr ("error: operation failed: %s\n", error->message);
+        shutdown (FALSE);
+        return;
+    }
+
+    if (!mbim_message_service_activation_response_parse (response,
+                                                         &nw_error,
+                                                         &result_data_size,
+                                                         &result_data,
+                                                         &error)) {
+        g_printerr ("error: couldn't parse response message: %s\n", error->message);
+        shutdown (FALSE);
+        return;
+    }
+
+    result_data_str = mbim_common_str_hex (result_data, result_data_size, ':');
+    g_print ("[%s] Service activation response received successfully:\n"
+             "\t         Network error: '%s'\n"
+             "\t                  Data: '%s'\n",
+             mbim_device_get_path_display (device),
+             VALIDATE_UNKNOWN (mbim_nw_error_get_string (nw_error)),
+             result_data_str);
+
+    shutdown (TRUE);
+}
+
 void
 mbimcli_basic_connect_run (MbimDevice   *device,
                            GCancellable *cancellable)
@@ -2660,6 +2919,192 @@ mbimcli_basic_connect_run (MbimDevice   *device,
                              10,
                              ctx->cancellable,
                              (GAsyncReadyCallback)provisioned_contexts_ready,
+                             NULL);
+        return;
+    }
+
+    /* Set provisioned context */
+    if (set_provisioned_contexts_str) {
+        g_auto(ProvisionedContextProperties) props = {
+            .access_string   = NULL,
+            .context_id      = 0,
+            .auth_protocol   = MBIM_AUTH_PROTOCOL_NONE,
+            .username        = NULL,
+            .password        = NULL,
+            .compression     = MBIM_COMPRESSION_NONE,
+            .context_type    = MBIM_CONTEXT_TYPE_INVALID,
+            .provider_id     = NULL
+        };
+
+        if (!mbimcli_parse_key_value_string (set_provisioned_contexts_str,
+                                             &error,
+                                             (MbimParseKeyValueForeachFn)set_provisioned_contexts_foreach_cb,
+                                             &props)) {
+            g_printerr ("error: couldn't parse input string: %s\n", error->message);
+            shutdown (FALSE);
+            return;
+        }
+
+        request = mbim_message_provisioned_contexts_set_new ((guint32)props.context_id,
+                                                             mbim_uuid_from_context_type (props.context_type),
+                                                             props.access_string,
+                                                             props.username,
+                                                             props.password,
+                                                             props.compression,
+                                                             props.auth_protocol,
+                                                             props.provider_id,
+                                                             &error);
+        if (!request) {
+            g_printerr ("error: couldn't create request: %s\n", error->message);
+            shutdown (FALSE);
+            return;
+        }
+
+        mbim_device_command (ctx->device,
+                             request,
+                             60,
+                             ctx->cancellable,
+                             (GAsyncReadyCallback)provisioned_contexts_ready,
+                             NULL);
+        return;
+    }
+
+    /* Set signal state */
+    if (set_signal_state_str) {
+        SignalStateProperties props = {
+            .signal_strength = 0,
+            .rssi            = 0,
+            .error_rate      = 0
+        };
+
+        if (!mbimcli_parse_key_value_string (set_signal_state_str,
+                                             &error,
+                                             (MbimParseKeyValueForeachFn)set_signal_state_foreach_cb,
+                                             &props)) {
+            g_printerr ("error: couldn't parse input string: %s\n", error->message);
+            shutdown (FALSE);
+            return;
+        }
+
+        request = mbim_message_signal_state_set_new (props.signal_strength,
+                                                     props.rssi,
+                                                     props.error_rate,
+                                                     &error);
+        if (!request) {
+            g_printerr ("error: couldn't create request: %s\n", error->message);
+            shutdown (FALSE);
+            return;
+        }
+
+        mbim_device_command (ctx->device,
+                             request,
+                             60,
+                             ctx->cancellable,
+                             (GAsyncReadyCallback)signal_state_ready,
+                             NULL);
+        return;
+    }
+
+    /* Set network idle hint state */
+    if (set_network_idle_hint_str) {
+        MbimNetworkIdleHintState  network_state;
+
+        if (!mbimcli_read_network_idle_hint_state_from_string (set_network_idle_hint_str, &network_state)) {
+            shutdown (FALSE);
+            return;
+        }
+
+        request = mbim_message_network_idle_hint_set_new (network_state, &error);
+        if (!request) {
+            g_printerr ("error: couldn't create request: %s\n", error->message);
+            shutdown (FALSE);
+            return;
+        }
+
+        mbim_device_command (ctx->device,
+                             request,
+                             10,
+                             ctx->cancellable,
+                             (GAsyncReadyCallback)network_idle_hint_ready,
+                             NULL);
+        return;
+    }
+
+    /* Get network idle hint state */
+    if (query_network_idle_hint_flag) {
+        request = mbim_message_network_idle_hint_query_new (NULL);
+        mbim_device_command (ctx->device,
+                             request,
+                             10,
+                             ctx->cancellable,
+                             (GAsyncReadyCallback)network_idle_hint_ready,
+                             NULL);
+        return;
+    }
+
+    /* Set emergency mode state */
+    if (set_emergency_mode_str) {
+        MbimEmergencyModeState  emergency_state;
+
+        if (!mbimcli_read_emergency_mode_state_from_string (set_emergency_mode_str, &emergency_state)) {
+            shutdown (FALSE);
+            return;
+        }
+
+        request = mbim_message_emergency_mode_set_new (emergency_state, &error);
+        if (!request) {
+            g_printerr ("error: couldn't create request: %s\n", error->message);
+            shutdown (FALSE);
+            return;
+        }
+
+        mbim_device_command (ctx->device,
+                             request,
+                             10,
+                             ctx->cancellable,
+                             (GAsyncReadyCallback)emergency_mode_ready,
+                             NULL);
+        return;
+    }
+
+    /* Query emergency mode state */
+    if (query_emergency_mode_flag) {
+        request = mbim_message_emergency_mode_query_new (NULL);
+        mbim_device_command (ctx->device,
+                             request,
+                             10,
+                             ctx->cancellable,
+                             (GAsyncReadyCallback)emergency_mode_ready,
+                             NULL);
+        return;
+    }
+
+    /* Request to set service activation */
+    if (set_service_activation_str) {
+        guint8 *data = NULL;
+        gsize   data_size = 0;
+
+        data = mbimcli_read_buffer_from_string (set_service_activation_str, -1, &data_size, &error);
+        if (!data) {
+            g_printerr ("error: couldn't parse the input: %s\n", error->message);
+            shutdown (FALSE);
+            return;
+        }
+
+        request = mbim_message_service_activation_set_new (data_size,
+                                                           data,
+                                                           &error);
+        if (!request) {
+            g_printerr ("error: couldn't create request: %s\n", error->message);
+            shutdown (FALSE);
+            return;
+        }
+
+        mbim_device_command (ctx->device,
+                             request,
+                             10,
+                             ctx->cancellable,
+                             (GAsyncReadyCallback)set_service_activation_ready,
                              NULL);
         return;
     }
