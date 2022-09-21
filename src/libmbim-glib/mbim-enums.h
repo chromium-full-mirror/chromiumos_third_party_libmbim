@@ -271,6 +271,8 @@ typedef enum { /*< since=1.0 >*/
  * @MBIM_PIN_TYPE_NETWORK_SUBSET_PUK: The network subset personalization unlock key.
  * @MBIM_PIN_TYPE_SERVICE_PROVIDER_PUK: The service provider (SP) personalization unlock key.
  * @MBIM_PIN_TYPE_CORPORATE_PUK: The corporate personalization unlock key.
+ * @MBIM_PIN_TYPE_NEV: The NEV key (MS UICC low-level access). Since 1.28.
+ * @MBIM_PIN_TYPE_ADM: The administrative key (MS UICC low-level access). Since 1.28.
  *
  * PIN Types.
  *
@@ -294,7 +296,9 @@ typedef enum { /*< since=1.0 >*/
     MBIM_PIN_TYPE_NETWORK_PUK          = 14,
     MBIM_PIN_TYPE_NETWORK_SUBSET_PUK   = 15,
     MBIM_PIN_TYPE_SERVICE_PROVIDER_PUK = 16,
-    MBIM_PIN_TYPE_CORPORATE_PUK        = 17
+    MBIM_PIN_TYPE_CORPORATE_PUK        = 17,
+    MBIM_PIN_TYPE_NEV                  = 18,
+    MBIM_PIN_TYPE_ADM                  = 19,
 } MbimPinType;
 
 /**
@@ -1924,6 +1928,84 @@ typedef enum { /*< since=1.28 >*/
     MBIM_INTEL_BOOT_MODE_WITHOUT_REBOOT_POWER_OFF = 4,
     MBIM_INTEL_BOOT_MODE_FAST_DOWNLOAD_MODE       = 5,
 } MbimIntelBootMode;
+
+/**
+ * MbimUiccApplicationType:
+ * @MBIM_UICC_APPLICATION_TYPE_UNKNOWN: Unknown.
+ * @MBIM_UICC_APPLICATION_TYPE_MF: Legacy SIM directories rooted at the MF.
+ * @MBIM_UICC_APPLICATION_TYPE_MF_SIM: Legacy SIM directories rooted at the DF_GSM.
+ * @MBIM_UICC_APPLICATION_TYPE_MF_RUIM: Legacy SIM directories rooted at the DF_CDMA.
+ * @MBIM_UICC_APPLICATION_TYPE_USIM: USIM application.
+ * @MBIM_UICC_APPLICATION_TYPE_CSIM: CSIM application.
+ * @MBIM_UICC_APPLICATION_TYPE_ISIM: ISIM application.
+ *
+ * Type of UICC application.
+ *
+ * Since: 1.28
+ */
+typedef enum { /*< since=1.28 >*/
+    MBIM_UICC_APPLICATION_TYPE_UNKNOWN = 0,
+    MBIM_UICC_APPLICATION_TYPE_MF      = 1,
+    MBIM_UICC_APPLICATION_TYPE_MF_SIM  = 2,
+    MBIM_UICC_APPLICATION_TYPE_MF_RUIM = 3,
+    MBIM_UICC_APPLICATION_TYPE_USIM    = 4,
+    MBIM_UICC_APPLICATION_TYPE_CSIM    = 5,
+    MBIM_UICC_APPLICATION_TYPE_ISIM    = 6,
+} MbimUiccApplicationType;
+
+/**
+ * MbimUiccFileAccessibility:
+ * @MBIM_UICC_FILE_ACCESSIBILITY_UNKNOWN: Unknown.
+ * @MBIM_UICC_FILE_ACCESSIBILITY_NOT_SHAREABLE: Not shareable.
+ * @MBIM_UICC_FILE_ACCESSIBILITY_SHAREABLE: Shareable.
+ *
+ * The UICC file accessibility.
+ *
+ * Since: 1.28
+ */
+typedef enum { /*< since=1.28 >*/
+    MBIM_UICC_FILE_ACCESSIBILITY_UNKNOWN       = 0,
+    MBIM_UICC_FILE_ACCESSIBILITY_NOT_SHAREABLE = 1,
+    MBIM_UICC_FILE_ACCESSIBILITY_SHAREABLE     = 2,
+} MbimUiccFileAccessibility;
+
+/**
+ * MbimUiccFileType:
+ * @MBIM_UICC_FILE_TYPE_UNKNOWN: Unknown.
+ * @MBIM_UICC_FILE_TYPE_WORKING_EF: Working EF.
+ * @MBIM_UICC_FILE_TYPE_INTERNAL_EF: Internal EF.
+ * @MBIM_UICC_FILE_TYPE_DF_OR_ADF: Dedicated file, DF or ADF.
+ *
+ * The UICC file type.
+ *
+ * Since: 1.28
+ */
+typedef enum { /*< since=1.28 >*/
+    MBIM_UICC_FILE_TYPE_UNKNOWN     = 0,
+    MBIM_UICC_FILE_TYPE_WORKING_EF  = 1,
+    MBIM_UICC_FILE_TYPE_INTERNAL_EF = 2,
+    MBIM_UICC_FILE_TYPE_DF_OR_ADF   = 3,
+} MbimUiccFileType;
+
+/**
+ * MbimUiccFileStructure:
+ * @MBIM_UICC_FILE_STRUCTURE_UNKNOWN: Unknown.
+ * @MBIM_UICC_FILE_STRUCTURE_TRANSPARENT: A single record of variable length.
+ * @MBIM_UICC_FILE_STRUCTURE_CYCLIC: A cyclic set of records, each of the same length.
+ * @MBIM_UICC_FILE_STRUCTURE_LINEAR: A linear set of records, each of the same length.
+ * @MBIM_UICC_FILE_STRUCTURE_BER_TLV: A set of data values accessible by tag.
+ *
+ * The UICC file structure.
+ *
+ * Since: 1.28
+ */
+typedef enum { /*< since=1.28 >*/
+    MBIM_UICC_FILE_STRUCTURE_UNKNOWN     = 0,
+    MBIM_UICC_FILE_STRUCTURE_TRANSPARENT = 1,
+    MBIM_UICC_FILE_STRUCTURE_CYCLIC      = 2,
+    MBIM_UICC_FILE_STRUCTURE_LINEAR      = 3,
+    MBIM_UICC_FILE_STRUCTURE_BER_TLV     = 4,
+} MbimUiccFileStructure;
 
 G_END_DECLS
 
