@@ -41,8 +41,8 @@ The libmbim releases are generated using meson.
     [fd.o] $ ln -s ${VERSION} latest
 
 5) Generate HTML for the manpages:
-    $ roffit < docs/man/mbimcli.1 > mbimcli.1.html
-    $ roffit < docs/man/mbim-network.1 > mbim-network.1.html
+    $ roffit < build/docs/man/mbimcli.1 > mbimcli.1.html
+    $ roffit < build/docs/man/mbim-network.1 > mbim-network.1.html
 
 6) Upload manpages in HTML to freedesktop.org:
     $ scp *.1.html fd.o:${libmbim}/man/${VERSION}/
@@ -72,4 +72,4 @@ The libmbim releases are generated using meson.
 *) Verifying the release signature requires the public key of the person who
    signed it, e.g.:
 
-    $ curl https://www.freedesktop.org/software/libmbim/0x3CAD53398973FFFA.asc | gpg --import
+    $ curl https://www.freedesktop.org/software/libmbim/0xAECE0239C6606AD5.asc | gpg --import

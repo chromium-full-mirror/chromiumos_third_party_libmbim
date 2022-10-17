@@ -3,7 +3,8 @@
 /*
  * libmbim-glib -- GLib/GIO based library to control MBIM devices
  *
- * Copyright (C) 2013 - 2018 Aleksander Morgado <aleksander@aleksander.es>
+ * Copyright (C) 2013 - 2022 Aleksander Morgado <aleksander@aleksander.es>
+ * Copyright (C) 2022 Google, Inc.
  */
 
 #include <glib.h>
@@ -40,6 +41,17 @@
 #include "mbim-ms-voice-extensions.h"
 
 /*****************************************************************************/
+
+#define MBIM_MESSAGE_IS_FRAGMENT(self)                                  \
+    (MBIM_MESSAGE_GET_MESSAGE_TYPE (self) == MBIM_MESSAGE_TYPE_COMMAND || \
+     MBIM_MESSAGE_GET_MESSAGE_TYPE (self) == MBIM_MESSAGE_TYPE_COMMAND_DONE || \
+     MBIM_MESSAGE_GET_MESSAGE_TYPE (self) == MBIM_MESSAGE_TYPE_INDICATE_STATUS)
+
+#define MBIM_MESSAGE_FRAGMENT_GET_TOTAL(self)                           \
+    GUINT32_FROM_LE (((struct full_message *)(self->data))->message.fragment.fragment_header.total)
+
+#define MBIM_MESSAGE_FRAGMENT_GET_CURRENT(self)                         \
+    GUINT32_FROM_LE (((struct full_message *)(self->data))->message.fragment.fragment_header.current)
 
 static void
 bytearray_apply_padding (GByteArray *buffer,
@@ -118,6 +130,169 @@ _mbim_message_allocate (MbimMessageType message_type,
 
     return self;
 }
+
+/*****************************************************************************/
+
+static gboolean
+_mbim_message_validate_generic_header (const MbimMessage  *self,
+                                       GError            **error)
+{
+    /* Validate that the generic header can be read before reading the message
+     * type and length */
+    if (self->len < sizeof (struct header)) {
+        g_set_error (error, MBIM_CORE_ERROR, MBIM_CORE_ERROR_INCOMPLETE_MESSAGE,
+                     "Message is shorter than the minimum header (%u < %u)",
+                     self->len, (guint) sizeof (struct header));
+        return FALSE;
+    }
+
+    /* Validate that the size reported in the message header is available */
+    if (self->len < MBIM_MESSAGE_GET_MESSAGE_LENGTH (self)) {
+        g_set_error (error, MBIM_CORE_ERROR, MBIM_CORE_ERROR_INCOMPLETE_MESSAGE,
+                     "Message is incomplete (%u < %u)",
+                     self->len, MBIM_MESSAGE_GET_MESSAGE_LENGTH (self));
+        return FALSE;
+    }
+
+    return TRUE;
+}
+
+static gboolean
+_mbim_message_validate_type_header (const MbimMessage  *self,
+                                    GError            **error)
+{
+    gsize message_header_size = 0;
+
+    if (!_mbim_message_validate_generic_header (self, error))
+        return FALSE;
+
+    /* Validate message type and get additional minimum required size based on
+     * message type */
+    switch (MBIM_MESSAGE_GET_MESSAGE_TYPE (self)) {
+        case MBIM_MESSAGE_TYPE_OPEN:
+            message_header_size = sizeof (struct header) + sizeof (struct open_message);
+            break;
+        case MBIM_MESSAGE_TYPE_CLOSE:
+            /* ignore check */
+            break;
+        case MBIM_MESSAGE_TYPE_COMMAND:
+            message_header_size = sizeof (struct header) + sizeof (struct fragment_header);
+            break;
+        case MBIM_MESSAGE_TYPE_OPEN_DONE:
+            message_header_size = sizeof (struct header) + sizeof (struct open_done_message);
+            break;
+        case MBIM_MESSAGE_TYPE_CLOSE_DONE:
+            message_header_size = sizeof (struct header) + sizeof (struct close_done_message);
+            break;
+        case MBIM_MESSAGE_TYPE_COMMAND_DONE:
+            message_header_size = sizeof (struct header) + sizeof (struct fragment_header);
+            break;
+        case MBIM_MESSAGE_TYPE_FUNCTION_ERROR:
+        case MBIM_MESSAGE_TYPE_HOST_ERROR:
+            message_header_size = sizeof (struct header) + sizeof (struct error_message);
+            break;
+        case MBIM_MESSAGE_TYPE_INDICATE_STATUS:
+            message_header_size = sizeof (struct header) + sizeof (struct fragment_header);
+            break;
+        default:
+        case MBIM_MESSAGE_TYPE_INVALID:
+            g_set_error (error, MBIM_CORE_ERROR, MBIM_CORE_ERROR_INVALID_MESSAGE,
+                         "Message type unknown: 0x%08x", MBIM_MESSAGE_GET_MESSAGE_TYPE (self));
+            return FALSE;
+    }
+
+    /* Validate that the message type specific header can be read. */
+    if (message_header_size && (MBIM_MESSAGE_GET_MESSAGE_LENGTH (self) < message_header_size)) {
+        g_set_error (error, MBIM_CORE_ERROR, MBIM_CORE_ERROR_INVALID_MESSAGE,
+                     "Invalid message size: message type header incomplete");
+        return FALSE;
+    }
+
+    return TRUE;
+}
+
+static gboolean
+_mbim_message_validate_partial_fragment (const MbimMessage  *self,
+                                         GError            **error)
+{
+    if (MBIM_MESSAGE_FRAGMENT_GET_CURRENT (self) >= MBIM_MESSAGE_FRAGMENT_GET_TOTAL (self)) {
+        g_set_error (error, MBIM_CORE_ERROR, MBIM_CORE_ERROR_INVALID_MESSAGE,
+                     "Invalid message fragment (%u/%u)",
+                     MBIM_MESSAGE_FRAGMENT_GET_CURRENT (self),
+                     MBIM_MESSAGE_FRAGMENT_GET_TOTAL (self));
+        return FALSE;
+    }
+
+    return TRUE;
+}
+
+static gboolean
+_mbim_message_validate_complete_fragment (const MbimMessage  *self,
+                                          GError            **error)
+{
+    gsize message_size = 0;
+
+    /* Get information buffer size */
+    switch (MBIM_MESSAGE_GET_MESSAGE_TYPE (self)) {
+        case MBIM_MESSAGE_TYPE_COMMAND:
+            message_size = sizeof (struct header) + sizeof (struct command_message) +
+                           GUINT32_FROM_LE (((struct full_message *)(self->data))->message.command.buffer_length);
+            break;
+        case MBIM_MESSAGE_TYPE_COMMAND_DONE:
+            message_size = sizeof (struct header) + sizeof (struct command_done_message) +
+                           GUINT32_FROM_LE (((struct full_message *)(self->data))->message.command_done.buffer_length);
+            break;
+        case MBIM_MESSAGE_TYPE_INDICATE_STATUS:
+            message_size = sizeof (struct header) + sizeof (struct indicate_status_message) +
+                           GUINT32_FROM_LE (((struct full_message *)(self->data))->message.indicate_status.buffer_length);
+            break;
+        case MBIM_MESSAGE_TYPE_OPEN:
+        case MBIM_MESSAGE_TYPE_CLOSE:
+        case MBIM_MESSAGE_TYPE_HOST_ERROR:
+        case MBIM_MESSAGE_TYPE_OPEN_DONE:
+        case MBIM_MESSAGE_TYPE_CLOSE_DONE:
+        case MBIM_MESSAGE_TYPE_FUNCTION_ERROR:
+        case MBIM_MESSAGE_TYPE_INVALID:
+        default:
+            g_assert_not_reached ();
+            break;
+    }
+
+    /* The information buffer must fit within the message contents */
+    if (MBIM_MESSAGE_GET_MESSAGE_LENGTH (self) < message_size) {
+        g_set_error (error, MBIM_CORE_ERROR, MBIM_CORE_ERROR_INVALID_MESSAGE,
+                     "Invalid complete fragment size: type header or information buffer incomplete (%u < %" G_GSIZE_FORMAT ")",
+                     MBIM_MESSAGE_GET_MESSAGE_LENGTH (self), message_size);
+        return FALSE;
+    }
+
+    return TRUE;
+}
+
+static gboolean
+_mbim_message_validate_fragment (const MbimMessage  *self,
+                                 GError            **error)
+{
+    if (MBIM_MESSAGE_FRAGMENT_GET_TOTAL (self) > 1)
+        return _mbim_message_validate_partial_fragment (self, error);
+
+    return _mbim_message_validate_complete_fragment (self, error);
+}
+
+gboolean
+mbim_message_validate (const MbimMessage  *self,
+                       GError            **error)
+{
+    if (!_mbim_message_validate_type_header (self, error))
+        return FALSE;
+
+    if (!MBIM_MESSAGE_IS_FRAGMENT (self))
+        return TRUE;
+
+    return _mbim_message_validate_fragment (self, error);
+}
+
+/*****************************************************************************/
 
 static guint32
 _mbim_message_get_information_buffer_offset (const MbimMessage *self)
@@ -1607,6 +1782,7 @@ MbimMessageType
 mbim_message_get_message_type (const MbimMessage *self)
 {
     g_return_val_if_fail (self != NULL, MBIM_MESSAGE_TYPE_INVALID);
+    g_return_val_if_fail (_mbim_message_validate_generic_header (self, NULL), MBIM_MESSAGE_TYPE_INVALID);
 
     return MBIM_MESSAGE_GET_MESSAGE_TYPE (self);
 }
@@ -1615,6 +1791,7 @@ guint32
 mbim_message_get_message_length (const MbimMessage *self)
 {
     g_return_val_if_fail (self != NULL, 0);
+    g_return_val_if_fail (_mbim_message_validate_generic_header (self, NULL), 0);
 
     return MBIM_MESSAGE_GET_MESSAGE_LENGTH (self);
 }
@@ -1623,6 +1800,7 @@ guint32
 mbim_message_get_transaction_id (const MbimMessage *self)
 {
     g_return_val_if_fail (self != NULL, 0);
+    g_return_val_if_fail (_mbim_message_validate_generic_header (self, NULL), 0);
 
     return MBIM_MESSAGE_GET_TRANSACTION_ID (self);
 }
@@ -1632,6 +1810,7 @@ mbim_message_set_transaction_id (MbimMessage *self,
                                  guint32      transaction_id)
 {
     g_return_if_fail (self != NULL);
+    g_return_if_fail (_mbim_message_validate_generic_header (self, NULL));
 
     ((struct header *)(self->data))->transaction_id = GUINT32_TO_LE (transaction_id);
 }
@@ -1683,15 +1862,7 @@ mbim_message_get_printable (const MbimMessage *self,
                             const gchar       *line_prefix,
                             gboolean           headers_only)
 {
-    gchar *str;
-
-    g_return_val_if_fail (self != NULL, NULL);
-    g_return_val_if_fail (line_prefix != NULL, NULL);
-
-    str = mbim_message_get_printable_full (self, 1, 0, line_prefix, headers_only, NULL);
-    g_assert (str);
-
-    return str;
+    return mbim_message_get_printable_full (self, 1, 0, line_prefix, headers_only, NULL);
 }
 
 gchar *
@@ -1707,6 +1878,7 @@ mbim_message_get_printable_full (const MbimMessage  *self,
 
     g_return_val_if_fail (self != NULL, NULL);
     g_return_val_if_fail (line_prefix != NULL, NULL);
+    g_return_val_if_fail (mbim_message_validate (self, NULL), NULL);
 
     if (mbimex_version_major > 3) {
         g_set_error (error, MBIM_CORE_ERROR, MBIM_CORE_ERROR_INVALID_ARGS,
@@ -2018,18 +2190,6 @@ mbim_message_get_printable_full (const MbimMessage  *self,
 /*****************************************************************************/
 /* Fragment interface */
 
-#define MBIM_MESSAGE_IS_FRAGMENT(self)                                  \
-    (MBIM_MESSAGE_GET_MESSAGE_TYPE (self) == MBIM_MESSAGE_TYPE_COMMAND || \
-     MBIM_MESSAGE_GET_MESSAGE_TYPE (self) == MBIM_MESSAGE_TYPE_COMMAND_DONE || \
-     MBIM_MESSAGE_GET_MESSAGE_TYPE (self) == MBIM_MESSAGE_TYPE_INDICATE_STATUS)
-
-#define MBIM_MESSAGE_FRAGMENT_GET_TOTAL(self)                           \
-    GUINT32_FROM_LE (((struct full_message *)(self->data))->message.fragment.fragment_header.total)
-
-#define MBIM_MESSAGE_FRAGMENT_GET_CURRENT(self)                         \
-    GUINT32_FROM_LE (((struct full_message *)(self->data))->message.fragment.fragment_header.current)
-
-
 gboolean
 _mbim_message_is_fragment (const MbimMessage *self)
 {
@@ -2239,6 +2399,7 @@ guint32
 mbim_message_open_get_max_control_transfer (const MbimMessage *self)
 {
     g_return_val_if_fail (self != NULL, 0);
+    g_return_val_if_fail (_mbim_message_validate_type_header (self, NULL), 0);
     g_return_val_if_fail (MBIM_MESSAGE_GET_MESSAGE_TYPE (self) == MBIM_MESSAGE_TYPE_OPEN, 0);
 
     return GUINT32_FROM_LE (((struct full_message *)(self->data))->message.open.max_control_transfer);
@@ -2267,6 +2428,7 @@ MbimStatusError
 mbim_message_open_done_get_status_code (const MbimMessage *self)
 {
     g_return_val_if_fail (self != NULL, MBIM_STATUS_ERROR_FAILURE);
+    g_return_val_if_fail (_mbim_message_validate_type_header (self, NULL), MBIM_STATUS_ERROR_FAILURE);
     g_return_val_if_fail (MBIM_MESSAGE_GET_MESSAGE_TYPE (self) == MBIM_MESSAGE_TYPE_OPEN_DONE, MBIM_STATUS_ERROR_FAILURE);
 
     return (MbimStatusError) GUINT32_FROM_LE (((struct full_message *)(self->data))->message.open_done.status_code);
@@ -2279,6 +2441,7 @@ mbim_message_open_done_get_result (const MbimMessage  *self,
     MbimStatusError status;
 
     g_return_val_if_fail (self != NULL, FALSE);
+    g_return_val_if_fail (_mbim_message_validate_type_header (self, NULL), FALSE);
     g_return_val_if_fail (MBIM_MESSAGE_GET_MESSAGE_TYPE (self) == MBIM_MESSAGE_TYPE_OPEN_DONE, FALSE);
 
     status = (MbimStatusError) GUINT32_FROM_LE (((struct full_message *)(self->data))->message.open_done.status_code);
@@ -2323,6 +2486,7 @@ MbimStatusError
 mbim_message_close_done_get_status_code (const MbimMessage *self)
 {
     g_return_val_if_fail (self != NULL, MBIM_STATUS_ERROR_FAILURE);
+    g_return_val_if_fail (_mbim_message_validate_type_header (self, NULL), MBIM_STATUS_ERROR_FAILURE);
     g_return_val_if_fail (MBIM_MESSAGE_GET_MESSAGE_TYPE (self) == MBIM_MESSAGE_TYPE_CLOSE_DONE, MBIM_STATUS_ERROR_FAILURE);
 
     return (MbimStatusError) GUINT32_FROM_LE (((struct full_message *)(self->data))->message.close_done.status_code);
@@ -2335,6 +2499,7 @@ mbim_message_close_done_get_result (const MbimMessage  *self,
     MbimStatusError status;
 
     g_return_val_if_fail (self != NULL, FALSE);
+    g_return_val_if_fail (_mbim_message_validate_type_header (self, NULL), FALSE);
     g_return_val_if_fail (MBIM_MESSAGE_GET_MESSAGE_TYPE (self) == MBIM_MESSAGE_TYPE_CLOSE_DONE, FALSE);
 
     status = (MbimStatusError) GUINT32_FROM_LE (((struct full_message *)(self->data))->message.close_done.status_code);
@@ -2384,6 +2549,7 @@ MbimProtocolError
 mbim_message_error_get_error_status_code (const MbimMessage *self)
 {
     g_return_val_if_fail (self != NULL, MBIM_PROTOCOL_ERROR_INVALID);
+    g_return_val_if_fail (_mbim_message_validate_type_header (self, NULL), MBIM_PROTOCOL_ERROR_INVALID);
     g_return_val_if_fail ((MBIM_MESSAGE_GET_MESSAGE_TYPE (self) == MBIM_MESSAGE_TYPE_HOST_ERROR ||
                            MBIM_MESSAGE_GET_MESSAGE_TYPE (self) == MBIM_MESSAGE_TYPE_FUNCTION_ERROR),
                           MBIM_PROTOCOL_ERROR_INVALID);
@@ -2396,8 +2562,8 @@ mbim_message_error_get_error (const MbimMessage *self)
 {
     MbimProtocolError error_status_code;
 
-
     g_return_val_if_fail (self != NULL, NULL);
+    g_return_val_if_fail (_mbim_message_validate_type_header (self, NULL), NULL);
     g_return_val_if_fail ((MBIM_MESSAGE_GET_MESSAGE_TYPE (self) == MBIM_MESSAGE_TYPE_HOST_ERROR ||
                            MBIM_MESSAGE_GET_MESSAGE_TYPE (self) == MBIM_MESSAGE_TYPE_FUNCTION_ERROR),
                           NULL);
@@ -2461,7 +2627,10 @@ MbimService
 mbim_message_command_get_service (const MbimMessage *self)
 {
     g_return_val_if_fail (self != NULL, MBIM_SERVICE_INVALID);
+    g_return_val_if_fail (_mbim_message_validate_type_header (self, NULL), MBIM_SERVICE_INVALID);
     g_return_val_if_fail (MBIM_MESSAGE_GET_MESSAGE_TYPE (self) == MBIM_MESSAGE_TYPE_COMMAND, MBIM_SERVICE_INVALID);
+    g_return_val_if_fail (MBIM_MESSAGE_FRAGMENT_GET_TOTAL (self) == 1, MBIM_SERVICE_INVALID);
+    g_return_val_if_fail (_mbim_message_validate_complete_fragment (self, NULL), MBIM_SERVICE_INVALID);
 
     return mbim_uuid_to_service ((const MbimUuid *)&(((struct full_message *)(self->data))->message.command.service_id));
 }
@@ -2470,7 +2639,10 @@ const MbimUuid *
 mbim_message_command_get_service_id (const MbimMessage *self)
 {
     g_return_val_if_fail (self != NULL, MBIM_UUID_INVALID);
+    g_return_val_if_fail (_mbim_message_validate_type_header (self, NULL), MBIM_UUID_INVALID);
     g_return_val_if_fail (MBIM_MESSAGE_GET_MESSAGE_TYPE (self) == MBIM_MESSAGE_TYPE_COMMAND, MBIM_UUID_INVALID);
+    g_return_val_if_fail (MBIM_MESSAGE_FRAGMENT_GET_TOTAL (self) == 1, MBIM_UUID_INVALID);
+    g_return_val_if_fail (_mbim_message_validate_complete_fragment (self, NULL), MBIM_UUID_INVALID);
 
     return (const MbimUuid *)&(((struct full_message *)(self->data))->message.command.service_id);
 }
@@ -2479,7 +2651,10 @@ guint32
 mbim_message_command_get_cid (const MbimMessage *self)
 {
     g_return_val_if_fail (self != NULL, 0);
+    g_return_val_if_fail (_mbim_message_validate_type_header (self, NULL), 0);
     g_return_val_if_fail (MBIM_MESSAGE_GET_MESSAGE_TYPE (self) == MBIM_MESSAGE_TYPE_COMMAND, 0);
+    g_return_val_if_fail (MBIM_MESSAGE_FRAGMENT_GET_TOTAL (self) == 1, 0);
+    g_return_val_if_fail (_mbim_message_validate_complete_fragment (self, NULL), 0);
 
     return GUINT32_FROM_LE (((struct full_message *)(self->data))->message.command.command_id);
 }
@@ -2488,7 +2663,10 @@ MbimMessageCommandType
 mbim_message_command_get_command_type (const MbimMessage *self)
 {
     g_return_val_if_fail (self != NULL, MBIM_MESSAGE_COMMAND_TYPE_UNKNOWN);
+    g_return_val_if_fail (_mbim_message_validate_type_header (self, NULL), MBIM_MESSAGE_COMMAND_TYPE_UNKNOWN);
     g_return_val_if_fail (MBIM_MESSAGE_GET_MESSAGE_TYPE (self) == MBIM_MESSAGE_TYPE_COMMAND, MBIM_MESSAGE_COMMAND_TYPE_UNKNOWN);
+    g_return_val_if_fail (MBIM_MESSAGE_FRAGMENT_GET_TOTAL (self) == 1, MBIM_MESSAGE_COMMAND_TYPE_UNKNOWN);
+    g_return_val_if_fail (_mbim_message_validate_complete_fragment (self, NULL), MBIM_MESSAGE_COMMAND_TYPE_UNKNOWN);
 
     return (MbimMessageCommandType) GUINT32_FROM_LE (((struct full_message *)(self->data))->message.command.command_type);
 }
@@ -2500,7 +2678,10 @@ mbim_message_command_get_raw_information_buffer (const MbimMessage *self,
     guint32 length;
 
     g_return_val_if_fail (self != NULL, NULL);
+    g_return_val_if_fail (_mbim_message_validate_type_header (self, NULL), NULL);
     g_return_val_if_fail (MBIM_MESSAGE_GET_MESSAGE_TYPE (self) == MBIM_MESSAGE_TYPE_COMMAND, NULL);
+    g_return_val_if_fail (MBIM_MESSAGE_FRAGMENT_GET_TOTAL (self) == 1, NULL);
+    g_return_val_if_fail (_mbim_message_validate_complete_fragment (self, NULL), NULL);
 
     length = GUINT32_FROM_LE (((struct full_message *)(self->data))->message.command.buffer_length);
     if (out_length)
@@ -2518,7 +2699,10 @@ MbimService
 mbim_message_command_done_get_service (const MbimMessage *self)
 {
     g_return_val_if_fail (self != NULL, MBIM_SERVICE_INVALID);
+    g_return_val_if_fail (_mbim_message_validate_type_header (self, NULL), MBIM_SERVICE_INVALID);
     g_return_val_if_fail (MBIM_MESSAGE_GET_MESSAGE_TYPE (self) == MBIM_MESSAGE_TYPE_COMMAND_DONE, MBIM_SERVICE_INVALID);
+    g_return_val_if_fail (MBIM_MESSAGE_FRAGMENT_GET_TOTAL (self) == 1, MBIM_SERVICE_INVALID);
+    g_return_val_if_fail (_mbim_message_validate_complete_fragment (self, NULL), MBIM_SERVICE_INVALID);
 
     return mbim_uuid_to_service ((const MbimUuid *)&(((struct full_message *)(self->data))->message.command_done.service_id));
 }
@@ -2527,7 +2711,10 @@ const MbimUuid *
 mbim_message_command_done_get_service_id (const MbimMessage *self)
 {
     g_return_val_if_fail (self != NULL, MBIM_UUID_INVALID);
+    g_return_val_if_fail (_mbim_message_validate_type_header (self, NULL), MBIM_UUID_INVALID);
     g_return_val_if_fail (MBIM_MESSAGE_GET_MESSAGE_TYPE (self) == MBIM_MESSAGE_TYPE_COMMAND_DONE, MBIM_UUID_INVALID);
+    g_return_val_if_fail (MBIM_MESSAGE_FRAGMENT_GET_TOTAL (self) == 1, MBIM_UUID_INVALID);
+    g_return_val_if_fail (_mbim_message_validate_complete_fragment (self, NULL), MBIM_UUID_INVALID);
 
     return (const MbimUuid *)&(((struct full_message *)(self->data))->message.command_done.service_id);
 }
@@ -2536,7 +2723,10 @@ guint32
 mbim_message_command_done_get_cid (const MbimMessage *self)
 {
     g_return_val_if_fail (self != NULL, 0);
+    g_return_val_if_fail (_mbim_message_validate_type_header (self, NULL), 0);
     g_return_val_if_fail (MBIM_MESSAGE_GET_MESSAGE_TYPE (self) == MBIM_MESSAGE_TYPE_COMMAND_DONE, 0);
+    g_return_val_if_fail (MBIM_MESSAGE_FRAGMENT_GET_TOTAL (self) == 1, 0);
+    g_return_val_if_fail (_mbim_message_validate_complete_fragment (self, NULL), 0);
 
     return GUINT32_FROM_LE (((struct full_message *)(self->data))->message.command_done.command_id);
 }
@@ -2545,7 +2735,10 @@ MbimStatusError
 mbim_message_command_done_get_status_code (const MbimMessage *self)
 {
     g_return_val_if_fail (self != NULL, MBIM_STATUS_ERROR_FAILURE);
+    g_return_val_if_fail (_mbim_message_validate_type_header (self, NULL), MBIM_STATUS_ERROR_FAILURE);
     g_return_val_if_fail (MBIM_MESSAGE_GET_MESSAGE_TYPE (self) == MBIM_MESSAGE_TYPE_COMMAND_DONE, MBIM_STATUS_ERROR_FAILURE);
+    g_return_val_if_fail (MBIM_MESSAGE_FRAGMENT_GET_TOTAL (self) == 1, MBIM_STATUS_ERROR_FAILURE);
+    g_return_val_if_fail (_mbim_message_validate_complete_fragment (self, NULL), MBIM_STATUS_ERROR_FAILURE);
 
     return (MbimStatusError) GUINT32_FROM_LE (((struct full_message *)(self->data))->message.command_done.status_code);
 }
@@ -2557,7 +2750,10 @@ mbim_message_command_done_get_result (const MbimMessage  *self,
     MbimStatusError status;
 
     g_return_val_if_fail (self != NULL, FALSE);
+    g_return_val_if_fail (_mbim_message_validate_type_header (self, NULL), FALSE);
     g_return_val_if_fail (MBIM_MESSAGE_GET_MESSAGE_TYPE (self) == MBIM_MESSAGE_TYPE_COMMAND_DONE, FALSE);
+    g_return_val_if_fail (MBIM_MESSAGE_FRAGMENT_GET_TOTAL (self) == 1, FALSE);
+    g_return_val_if_fail (_mbim_message_validate_complete_fragment (self, NULL), FALSE);
 
     status = (MbimStatusError) GUINT32_FROM_LE (((struct full_message *)(self->data))->message.command_done.status_code);
     if (status == MBIM_STATUS_ERROR_NONE)
@@ -2574,7 +2770,10 @@ mbim_message_command_done_get_raw_information_buffer (const MbimMessage *self,
     guint32 length;
 
     g_return_val_if_fail (self != NULL, NULL);
+    g_return_val_if_fail (_mbim_message_validate_type_header (self, NULL), NULL);
     g_return_val_if_fail (MBIM_MESSAGE_GET_MESSAGE_TYPE (self) == MBIM_MESSAGE_TYPE_COMMAND_DONE, NULL);
+    g_return_val_if_fail (MBIM_MESSAGE_FRAGMENT_GET_TOTAL (self) == 1, NULL);
+    g_return_val_if_fail (_mbim_message_validate_complete_fragment (self, NULL), NULL);
 
     length = GUINT32_FROM_LE (((struct full_message *)(self->data))->message.command_done.buffer_length);
     if (out_length)
@@ -2592,7 +2791,10 @@ MbimService
 mbim_message_indicate_status_get_service (const MbimMessage *self)
 {
     g_return_val_if_fail (self != NULL, MBIM_SERVICE_INVALID);
+    g_return_val_if_fail (_mbim_message_validate_type_header (self, NULL), MBIM_SERVICE_INVALID);
     g_return_val_if_fail (MBIM_MESSAGE_GET_MESSAGE_TYPE (self) == MBIM_MESSAGE_TYPE_INDICATE_STATUS, MBIM_SERVICE_INVALID);
+    g_return_val_if_fail (MBIM_MESSAGE_FRAGMENT_GET_TOTAL (self) == 1, MBIM_SERVICE_INVALID);
+    g_return_val_if_fail (_mbim_message_validate_complete_fragment (self, NULL), MBIM_SERVICE_INVALID);
 
     return mbim_uuid_to_service ((const MbimUuid *)&(((struct full_message *)(self->data))->message.indicate_status.service_id));
 }
@@ -2601,7 +2803,10 @@ const MbimUuid *
 mbim_message_indicate_status_get_service_id (const MbimMessage *self)
 {
     g_return_val_if_fail (self != NULL, MBIM_UUID_INVALID);
+    g_return_val_if_fail (_mbim_message_validate_type_header (self, NULL), MBIM_UUID_INVALID);
     g_return_val_if_fail (MBIM_MESSAGE_GET_MESSAGE_TYPE (self) == MBIM_MESSAGE_TYPE_INDICATE_STATUS, MBIM_UUID_INVALID);
+    g_return_val_if_fail (MBIM_MESSAGE_FRAGMENT_GET_TOTAL (self) == 1, MBIM_UUID_INVALID);
+    g_return_val_if_fail (_mbim_message_validate_complete_fragment (self, NULL), MBIM_UUID_INVALID);
 
     return (const MbimUuid *)&(((struct full_message *)(self->data))->message.indicate_status.service_id);
 }
@@ -2610,7 +2815,10 @@ guint32
 mbim_message_indicate_status_get_cid (const MbimMessage *self)
 {
     g_return_val_if_fail (self != NULL, 0);
+    g_return_val_if_fail (_mbim_message_validate_type_header (self, NULL), 0);
     g_return_val_if_fail (MBIM_MESSAGE_GET_MESSAGE_TYPE (self) == MBIM_MESSAGE_TYPE_INDICATE_STATUS, 0);
+    g_return_val_if_fail (MBIM_MESSAGE_FRAGMENT_GET_TOTAL (self) == 1, 0);
+    g_return_val_if_fail (_mbim_message_validate_complete_fragment (self, NULL), 0);
 
     return GUINT32_FROM_LE (((struct full_message *)(self->data))->message.indicate_status.command_id);
 }
@@ -2622,7 +2830,10 @@ mbim_message_indicate_status_get_raw_information_buffer (const MbimMessage *self
     guint32 length;
 
     g_return_val_if_fail (self != NULL, NULL);
+    g_return_val_if_fail (_mbim_message_validate_type_header (self, NULL), NULL);
     g_return_val_if_fail (MBIM_MESSAGE_GET_MESSAGE_TYPE (self) == MBIM_MESSAGE_TYPE_INDICATE_STATUS, NULL);
+    g_return_val_if_fail (MBIM_MESSAGE_FRAGMENT_GET_TOTAL (self) == 1, NULL);
+    g_return_val_if_fail (_mbim_message_validate_complete_fragment (self, NULL), NULL);
 
     length = GUINT32_FROM_LE (((struct full_message *)(self->data))->message.indicate_status.buffer_length);
     if (out_length)
@@ -2648,6 +2859,7 @@ mbim_message_response_get_result (const MbimMessage  *self,
     g_return_val_if_fail (expected == MBIM_MESSAGE_TYPE_OPEN_DONE  ||
                           expected == MBIM_MESSAGE_TYPE_CLOSE_DONE ||
                           expected == MBIM_MESSAGE_TYPE_COMMAND_DONE, FALSE);
+    g_return_val_if_fail (_mbim_message_validate_type_header (self, NULL), FALSE);
 
     type = MBIM_MESSAGE_GET_MESSAGE_TYPE (self);
     if (type != MBIM_MESSAGE_TYPE_FUNCTION_ERROR && type != expected) {
@@ -2668,6 +2880,8 @@ mbim_message_response_get_result (const MbimMessage  *self,
         break;
 
     case MBIM_MESSAGE_TYPE_COMMAND_DONE:
+        g_return_val_if_fail (MBIM_MESSAGE_FRAGMENT_GET_TOTAL (self) == 1, FALSE);
+        g_return_val_if_fail (_mbim_message_validate_complete_fragment (self, NULL), FALSE);
         status = (MbimStatusError) GUINT32_FROM_LE (((struct full_message *)(self->data))->message.command_done.status_code);
         break;
 
