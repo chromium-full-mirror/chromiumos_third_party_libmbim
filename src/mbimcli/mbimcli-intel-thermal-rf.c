@@ -55,7 +55,7 @@ static GOptionEntry entries[] = {
       "Enable or disable RFIM (disabled by default)",
       "[(on|off)]"
     },
-    {NULL}
+    { NULL, 0, 0, 0, NULL, NULL, NULL }
 };
 
 GOptionGroup *
@@ -232,7 +232,6 @@ mbimcli_intel_thermal_rf_run (MbimDevice   *device,
                               GCancellable *cancellable)
 {
     g_autoptr(MbimMessage) request = NULL;
-    g_autoptr(GError)      error = NULL;
 
     /* Initialize context */
     ctx = g_slice_new (Context);

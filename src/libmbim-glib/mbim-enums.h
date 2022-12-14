@@ -977,8 +977,8 @@ typedef enum { /*< since=1.4 >*/
  */
 typedef enum { /*< since=1.4 >*/
     MBIM_SMS_STATUS_FLAG_NONE               = 0,
-    MBIM_SMS_STATUS_FLAG_MESSAGE_STORE_FULL = 1,
-    MBIM_SMS_STATUS_FLAG_NEW_MESSAGE        = 2
+    MBIM_SMS_STATUS_FLAG_MESSAGE_STORE_FULL = 1 << 0,
+    MBIM_SMS_STATUS_FLAG_NEW_MESSAGE        = 1 << 1,
 } MbimSmsStatusFlag;
 
 /*****************************************************************************/
@@ -2006,6 +2006,24 @@ typedef enum { /*< since=1.28 >*/
     MBIM_UICC_FILE_STRUCTURE_LINEAR      = 3,
     MBIM_UICC_FILE_STRUCTURE_BER_TLV     = 4,
 } MbimUiccFileStructure;
+
+/**
+ * MbimTraceCommand:
+ * @MBIM_TRACE_COMMAND_MODE: Trace command mode value.
+ * @MBIM_TRACE_COMMAND_LEVEL: Trace command level value.
+ * @MBIM_TRACE_COMMAND_LOCATION: Trace command location information.
+ * @MBIM_TRACE_COMMAND_FLASH_INTERVAL: Trace command flash interval information.
+ *
+ * The trace command value.
+ *
+ * Since: 1.30
+ */
+typedef enum { /*< since=1.28 >*/
+    MBIM_TRACE_COMMAND_MODE           = 0,
+    MBIM_TRACE_COMMAND_LEVEL          = 1,
+    MBIM_TRACE_COMMAND_LOCATION       = 2,
+    MBIM_TRACE_COMMAND_FLASH_INTERVAL = 3,
+} MbimTraceCommand;
 
 G_END_DECLS
 

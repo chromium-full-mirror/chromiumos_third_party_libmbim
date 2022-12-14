@@ -42,7 +42,7 @@ static GOptionEntry entries[] = {
       "Reboot modem. Boot mode and timeout arguments only required if MBIMEx >= 2.0.",
       "[(Boot Mode),(Timeout)]"
     },
-    { NULL }
+    { NULL, 0, 0, 0, NULL, NULL, NULL }
 };
 
 GOptionGroup *
@@ -169,7 +169,6 @@ mbimcli_intel_firmware_update_run (MbimDevice   *device,
                                    GCancellable *cancellable)
 {
     g_autoptr(MbimMessage) request = NULL;
-    g_autoptr(GError)      error = NULL;
 
     /* Initialize context */
     ctx = g_slice_new (Context);

@@ -430,6 +430,20 @@ typedef enum { /*< since=1.28 >*/
 } MbimCidIntelThermalRf;
 
 /**
+ * MbimCidMsVoiceExtensions:
+ * @MBIM_CID_MS_VOICE_EXTENSIONS_UNKNOWN: Unknown command.
+ * @MBIM_CID_MS_VOICE_EXTENSIONS_NITZ: Network Identity and Time Zone information command.
+ *
+ * MBIM commands in the %MBIM_SERVICE_MS_VOICE_EXTENSIONS service.
+ *
+ * Since: 1.28
+ */
+typedef enum { /*< since=1.28 >*/
+    MBIM_CID_MS_VOICE_EXTENSIONS_UNKNOWN = 0,
+    MBIM_CID_MS_VOICE_EXTENSIONS_NITZ    = 10,
+} MbimCidMsVoiceExtensions;
+
+/**
  * MbimCidIntelMutualAuthentication:
  * @MBIM_CID_INTEL_MUTUAL_AUTHENTICATION_UNKNOWN: Unknown command.
  * @MBIM_CID_INTEL_MUTUAL_AUTHENTICATION_FCC_LOCK: FCC lock set.
@@ -444,18 +458,18 @@ typedef enum { /*< since=1.30 >*/
 } MbimCidIntelMutualAuthentication;
 
 /**
- * MbimCidMsVoiceExtensions:
- * @MBIM_CID_MS_VOICE_EXTENSIONS_UNKNOWN: Unknown command.
- * @MBIM_CID_MS_VOICE_EXTENSIONS_NITZ: Network Identity and Time Zone information command.
+ * MbimCidIntelTools:
+ * @MBIM_CID_INTEL_TOOLS_UNKNOWN: Unknown command.
+ * @MBIM_CID_INTEL_TOOLS_TRACE_CONFIG: Configure Modem traces.
  *
- * MBIM commands in the %MBIM_SERVICE_MS_VOICE_EXTENSIONS service.
+ * MBIM commands in the %MBIM_SERVICE_INTEL_TOOLS service.
  *
- * Since: 1.28
+ * Since: 1.30
  */
-typedef enum { /*< since=1.28 >*/
-    MBIM_CID_MS_VOICE_EXTENSIONS_UNKNOWN = 0,
-    MBIM_CID_MS_VOICE_EXTENSIONS_NITZ    = 10,
-} MbimCidMsVoiceExtensions;
+typedef enum { /*< since=1.30 >*/
+    MBIM_CID_INTEL_TOOLS_UNKNOWN      = 0,
+    MBIM_CID_INTEL_TOOLS_TRACE_CONFIG = 8,
+} MbimCidIntelTools;
 
 /**
  * mbim_cid_can_set:

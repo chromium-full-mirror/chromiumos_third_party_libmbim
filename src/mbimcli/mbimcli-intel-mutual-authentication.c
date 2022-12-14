@@ -43,7 +43,7 @@ static GOptionEntry entries[] = {
       "Set FCC lock information",
       "[(ResponsePresent),(Response)]"
     },
-    {NULL}
+    { NULL, 0, 0, 0, NULL, NULL, NULL }
 };
 
 GOptionGroup *
@@ -141,7 +141,6 @@ mbimcli_intel_mutual_authentication_run (MbimDevice   *device,
                                          GCancellable *cancellable)
 {
     g_autoptr(MbimMessage) request = NULL;
-    g_autoptr(GError)      error = NULL;
 
     /* Initialize context */
     ctx = g_slice_new (Context);

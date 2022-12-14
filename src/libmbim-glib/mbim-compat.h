@@ -50,8 +50,15 @@ typedef int MbimDeprecatedRegistrationFlag;
 /* 'Service Subscriber List' rename to 'Service Subscribe List' */
 
 /* The following type exists just so that we can get deprecation warnings */
+#if defined(__clang__)
+# pragma clang diagnostic push
+# pragma clang diagnostic ignored "-Wtypedef-redefinition"
+#endif
 G_DEPRECATED
 typedef int MbimDeprecatedCidBasicConnect;
+#if defined(__clang__)
+# pragma clang diagnostic pop
+#endif
 
 /**
  * MBIM_CID_BASIC_CONNECT_DEVICE_SERVICE_SUBSCRIBER_LIST:
@@ -108,8 +115,15 @@ gboolean mbim_message_device_service_subscriber_list_response_parse (
  * MbimLteAttachStatus struct */
 
 /* The following type exists just so that we can get deprecation warnings */
+#if defined(__clang__)
+# pragma clang diagnostic push
+# pragma clang diagnostic ignored "-Wtypedef-redefinition"
+#endif
 G_DEPRECATED
 typedef int MbimDeprecatedCidMsBasicConnectExtensions;
+#if defined(__clang__)
+# pragma clang diagnostic pop
+#endif
 
 /**
  * MBIM_CID_MS_BASIC_CONNECT_EXTENSIONS_LTE_ATTACH_STATUS:
@@ -164,17 +178,12 @@ typedef MbimDeprecatedLteAttachStatus MbimLteAttachStatus;
 G_DEPRECATED
 void mbim_lte_attach_status_free (MbimDeprecatedLteAttachStatus *var);
 
-#if defined(__clang__)
-# pragma clang diagnostic push
-# pragma clang diagnostic ignored "-Wdeprecated-declarations"
-#elif defined(__GNUC__)
+#if defined(__clang__) || defined(__GNUC__)
 # pragma GCC diagnostic push
 # pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 #endif
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (MbimLteAttachStatus, mbim_lte_attach_status_free)
-#if defined(__clang__)
-# pragma clang diagnostic pop
-#elif defined(__GNUC__)
+#if defined(__clang__) || defined (__GNUC__)
 # pragma GCC diagnostic pop
 #endif
 
@@ -235,8 +244,15 @@ gboolean mbim_message_ms_basic_connect_extensions_lte_attach_status_notification
 /* Network errors fixup */
 
 /* The following type exists just so that we can get deprecation warnings */
+#if defined(__clang__)
+# pragma clang diagnostic push
+# pragma clang diagnostic ignored "-Wtypedef-redefinition"
+#endif
 G_DEPRECATED
 typedef int MbimDeprecatedNwError;
+#if defined(__clang__)
+# pragma clang diagnostic pop
+#endif
 
 /**
  * MBIM_NW_ERROR_UNKNOWN:
@@ -252,8 +268,15 @@ typedef int MbimDeprecatedNwError;
 /* Rename blacklist to denylist */
 
 /* The following type exists just so that we can get deprecation warnings */
+#if defined(__clang__)
+# pragma clang diagnostic push
+# pragma clang diagnostic ignored "-Wtypedef-redefinition"
+#endif
 G_DEPRECATED
 typedef int MbimDeprecatedCidMsBasicConnectExtensions;
+#if defined(__clang__)
+# pragma clang diagnostic pop
+#endif
 
 /**
  * MBIM_CID_MS_BASIC_CONNECT_EXTENSIONS_NETWORK_BLACKLIST:
@@ -264,6 +287,22 @@ typedef int MbimDeprecatedCidMsBasicConnectExtensions;
  * Deprecated: 1.28: Use MBIM_CID_MS_BASIC_CONNECT_EXTENSIONS_NETWORK_DENYLIST instead.
  */
 #define MBIM_CID_MS_BASIC_CONNECT_EXTENSIONS_NETWORK_BLACKLIST (MbimDeprecatedCidMsBasicConnectExtensions) MBIM_CID_MS_BASIC_CONNECT_EXTENSIONS_NETWORK_DENYLIST
+
+/*****************************************************************************/
+/* MbimSmsStatusFlag is flags, not an enum */
+
+/**
+ * mbim_sms_status_flag_get_string:
+ * @val: a MbimSmsStatusFlag.
+ *
+ * Gets the nickname string for the #MbimSmsStatusFlag specified at @val.
+ *
+ * Returns: (transfer none): a string with the nickname, or %NULL if not found. Do not free the returned value.
+ *
+ * Since: 1.4
+ * Deprecated: 1.30: Use mbim_sms_status_flag_build_string_from_mask() instead.
+ */
+const gchar *mbim_sms_status_flag_get_string (MbimSmsStatusFlag val);
 
 #endif /* MBIM_DISABLE_DEPRECATED */
 
