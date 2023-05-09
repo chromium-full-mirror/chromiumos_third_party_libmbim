@@ -24,6 +24,7 @@
       <year>2020</year>
       <year>2021</year>
       <year>2022</year>
+      <year>2023</year>
       <holder>The libmbim-glib authors</holder>
     </copyright>
 
@@ -111,6 +112,11 @@
   <chapter>
     <title>Quectel-defined Services</title>
     <xi:include href="xml/mbim-quectel.xml"/>
+  </chapter>
+
+  <chapter>
+    <title>Google-defined Services</title>
+    <xi:include href="xml/mbim-google.xml"/>
   </chapter>
 
   <chapter>

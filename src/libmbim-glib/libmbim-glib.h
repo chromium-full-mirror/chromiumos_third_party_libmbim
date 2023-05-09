@@ -26,6 +26,7 @@
 
 /* generated */
 #include "mbim-enum-types.h"
+#include "mbim-flag-types.h"
 #include "mbim-error-types.h"
 #include "mbim-basic-connect.h"
 #include "mbim-sms.h"
@@ -48,6 +49,7 @@
 #include "mbim-ms-voice-extensions.h"
 #include "mbim-intel-mutual-authentication.h"
 #include "mbim-intel-tools.h"
+#include "mbim-google.h"
 
 /* backwards compatibility */
 #include "mbim-compat.h"

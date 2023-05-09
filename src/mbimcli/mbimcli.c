@@ -3,7 +3,7 @@
 /*
  * mbimcli -- Command line interface to control MBIM devices
  *
- * Copyright (C) 2013 - 2014 Aleksander Morgado <aleksander@aleksander.es>
+ * Copyright (C) 2013 - 2023 Aleksander Morgado <aleksander@aleksander.es>
  * Copyright (C) 2022 Intel Corporation
  */
 
@@ -182,7 +182,7 @@ static void
 print_version_and_exit (void)
 {
     g_print (PROGRAM_NAME " " PROGRAM_VERSION "\n"
-             "Copyright (C) 2013-2021 Aleksander Morgado\n"
+             "Copyright (C) 2013-2023 Aleksander Morgado\n"
              "License GPLv2+: GNU GPL version 2 or later <http://gnu.org/licenses/gpl-2.0.html>\n"
              "This is free software: you are free to change and redistribute it.\n"
              "There is NO WARRANTY, to the extent permitted by law.\n"
@@ -314,6 +314,9 @@ device_open_ready (MbimDevice   *dev,
         return;
     case MBIM_SERVICE_INTEL_MUTUAL_AUTHENTICATION:
         mbimcli_intel_mutual_authentication_run (dev, cancellable);
+        return;
+    case MBIM_SERVICE_GOOGLE:
+        mbimcli_google_run (dev, cancellable);
         return;
     case MBIM_SERVICE_SMS:
     case MBIM_SERVICE_USSD:
@@ -464,6 +467,11 @@ parse_actions (void)
         actions_enabled++;
     }
 
+    if (mbimcli_google_options_enabled ()) {
+        service = MBIM_SERVICE_GOOGLE;
+        actions_enabled++;
+    }
+
     /* Noop */
     if (noop_flag)
         actions_enabled++;
@@ -514,6 +522,7 @@ int main (int argc, char **argv)
     g_option_context_add_group (context, mbimcli_ms_uicc_low_level_access_get_option_group ());
     g_option_context_add_group (context, mbimcli_intel_mutual_authentication_get_option_group ());
     g_option_context_add_group (context, mbimcli_intel_tools_get_option_group ());
+    g_option_context_add_group (context, mbimcli_google_get_option_group());
     g_option_context_add_main_entries (context, main_entries, NULL);
     if (!g_option_context_parse (context, &argc, &argv, &error)) {
         g_printerr ("error: %s\n", error->message);
