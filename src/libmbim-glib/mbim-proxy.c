@@ -770,7 +770,7 @@ process_internal_proxy_config (MbimProxy   *self,
     }
 
     /* Retrieve path from request */
-    if (!_mbim_message_read_string (message, 0, 0, MBIM_STRING_ENCODING_UTF16, &incoming_path, &error)) {
+    if (!_mbim_message_read_string (message, 0, 0, MBIM_STRING_ENCODING_UTF16, &incoming_path, NULL, &error)) {
         g_warning ("[client %lu,0x%08x] cannot configure proxy: couldn't read device path from request: %s",
                    request->client->id, request->original_transaction_id, error->message);
         request->response = build_proxy_control_command_done (message, MBIM_STATUS_ERROR_INVALID_PARAMETERS);
@@ -1193,7 +1193,7 @@ parse_request (MbimProxy *self,
         g_autoptr(GError)      error = NULL;
 
         /* Invalid message? */
-        if (!mbim_message_validate ((const MbimMessage *)client->buffer, &error)) {
+        if (!_mbim_message_validate_internal ((const MbimMessage *)client->buffer, TRUE, &error)) {
             /* No full message yet */
             if (g_error_matches (error, MBIM_CORE_ERROR, MBIM_CORE_ERROR_INCOMPLETE_MESSAGE))
                 return;

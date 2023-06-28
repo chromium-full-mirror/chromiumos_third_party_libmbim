@@ -539,7 +539,12 @@ class Struct:
             '{\n'
             '    gboolean success = FALSE;\n'
             '    ${name} *out;\n'
-            '    guint32 offset = relative_offset;\n'
+            '    guint32 offset = relative_offset;\n')
+        if self.ms_struct_array_member == True:
+            template += (
+                '    guint32 extra_bytes_read = 0;\n')
+
+        template += (
             '\n'
             '    g_assert (self != NULL);\n'
             '\n'
@@ -563,6 +568,11 @@ class Struct:
                     '        offset += 16;\n'
                     '    }\n')
             elif field['format'] in ['ref-byte-array', 'ref-byte-array-no-offset']:
+                # Unsupported because ms-struct-array requires the read bytes of the struct to contain the size read
+                # fro the variable buffer, which is currently not implemented for this type.
+                if self.ms_struct_array_member == True:
+                    raise ValueError('type unsupported in \'ms-struct-array\'')
+
                 translations['has_offset'] = 'TRUE' if field['format'] == 'ref-byte-array' else 'FALSE'
                 if 'array-size-field' in field:
                     translations['array_size_field_name_underscore'] = utils.build_underscore_name_from_camelcase(field['array-size-field'])
@@ -590,6 +600,11 @@ class Struct:
                         '        offset += 8;\n'
                         '    }\n')
             elif field['format'] == 'unsized-byte-array':
+                # Unsupported because ms-struct-array requires the read bytes of the struct to contain the size read
+                # fro the variable buffer, which is currently not implemented for this type.
+                if self.ms_struct_array_member == True:
+                    raise ValueError('type unsupported in \'ms-struct-array\'')
+
                 inner_template += (
                     '\n'
                     '    {\n'
@@ -646,12 +661,31 @@ class Struct:
                     '    offset += 8;\n')
             elif field['format'] == 'string':
                 translations['encoding'] = 'MBIM_STRING_ENCODING_UTF8' if 'encoding' in field and field['encoding'] == 'utf-8' else 'MBIM_STRING_ENCODING_UTF16'
-                inner_template += (
-                    '\n'
-                    '    if (!_mbim_message_read_string (self, relative_offset, offset, ${encoding}, &out->${field_name_underscore}, error))\n'
-                    '        goto out;\n'
-                    '    offset += 8;\n')
+                if self.ms_struct_array_member == True:
+                    inner_template += (
+                        '\n'
+                        '    {\n'
+                        '        guint32 str_bytes_read;\n'
+                        '\n'
+                        '        if (!_mbim_message_read_string (self, relative_offset, offset, ${encoding}, &out->${field_name_underscore}, &str_bytes_read, error))\n'
+                        '            goto out;\n'
+                        '        if (str_bytes_read % 4)\n'
+                        '            str_bytes_read = (str_bytes_read + (4 - (str_bytes_read % 4)));\n'
+                        '        extra_bytes_read += str_bytes_read;\n'
+                        '        offset += 8;\n'
+                        '    }\n')
+                else:
+                    inner_template += (
+                        '\n'
+                        '    if (!_mbim_message_read_string (self, relative_offset, offset, ${encoding}, &out->${field_name_underscore}, NULL, error))\n'
+                        '        goto out;\n'
+                        '    offset += 8;\n')
             elif field['format'] == 'string-array':
+                # Unsupported because ms-struct-array requires the read bytes of the struct to contain the size read
+                # fro the variable buffer, which is currently not implemented for this type.
+                if self.ms_struct_array_member == True:
+                    raise ValueError('type \'ref-byte-array\' unsupported in \'ms-struct-array\'')
+
                 translations['encoding'] = 'MBIM_STRING_ENCODING_UTF8' if 'encoding' in field and field['encoding'] == 'utf-8' else 'MBIM_STRING_ENCODING_UTF16'
                 translations['array_size_field_name_underscore'] = utils.build_underscore_name_from_camelcase(field['array-size-field'])
                 inner_template += (
@@ -671,6 +705,11 @@ class Struct:
                     '        offset += 4;\n'
                     '    }\n')
             elif field['format'] == 'ref-ipv4':
+                # Unsupported because ms-struct-array requires the read bytes of the struct to contain the size read
+                # fro the variable buffer, which is currently not implemented for this type.
+                if self.ms_struct_array_member == True:
+                    raise ValueError('type \'ref-byte-array\' unsupported in \'ms-struct-array\'')
+
                 inner_template += (
                     '\n'
                     '    {\n'
@@ -693,6 +732,11 @@ class Struct:
                     '        offset += 16;\n'
                     '    }\n')
             elif field['format'] == 'ref-ipv6':
+                # Unsupported because ms-struct-array requires the read bytes of the struct to contain the size read
+                # fro the variable buffer, which is currently not implemented for this type.
+                if self.ms_struct_array_member == True:
+                    raise ValueError('type \'ref-byte-array\' unsupported in \'ms-struct-array\'')
+
                 inner_template += (
                     '\n'
                     '    {\n'
@@ -713,12 +757,21 @@ class Struct:
             '    success = TRUE;\n'
             '\n'
             ' out:\n'
-            '    if (success) {\n'
-            '        if (bytes_read)\n'
-            '            *bytes_read = (offset - relative_offset);\n'
-            '        return out;\n'
-            '    }\n'
-            '\n')
+            '    if (success) {\n')
+        if self.ms_struct_array_member == True:
+            template += (
+                '        if (bytes_read)\n'
+                '            *bytes_read = (offset - relative_offset) + extra_bytes_read;\n'
+                '        return out;\n'
+                '    }\n'
+                '\n')
+        else:
+            template += (
+                '        if (bytes_read)\n'
+                '            *bytes_read = (offset - relative_offset);\n'
+                '        return out;\n'
+                '    }\n'
+                '\n')
 
         for field in self.contents:
             translations['field_name_underscore'] = utils.build_underscore_name_from_camelcase(field['name'])
@@ -773,6 +826,12 @@ class Struct:
             cfile.write(string.Template(template).substitute(translations))
 
         if self.struct_array_member == True:
+            # struct size is REQUIRED to be non-zero at this point, because that ensures
+            # that the struct has exclusively fixed-sized variables, required to iterate
+            # the elements with "offset += ${struct_size}".
+            if self.size == 0:
+                raise ValueError('Struct ' + self.name + ' has unexpected variable length fields')
+
             template = (
                 '\n'
                 'static gboolean\n'
@@ -783,8 +842,7 @@ class Struct:
                 '    ${name}Array **out_array,\n'
                 '    GError **error)\n'
                 '{\n'
-                '    GError *inner_error = NULL;\n'
-                '    ${name}Array *out;\n'
+                '    g_autoptr(GPtrArray) out = NULL;\n'
                 '    guint32 i;\n'
                 '    guint32 offset;\n'
                 '\n'
@@ -793,20 +851,23 @@ class Struct:
                 '        return TRUE;\n'
                 '    }\n'
                 '\n'
-                '    out = g_new0 (${name} *, array_size + 1);\n'
+                '    if (!_mbim_message_read_guint32 (self, relative_offset_array_start, &offset, error))\n'
+                '        return FALSE;\n'
                 '\n'
-                '    _mbim_message_read_guint32 (self, relative_offset_array_start, &offset, &inner_error);\n'
-                '    for (i = 0; !inner_error && (i < array_size); i++, offset += ${struct_size})\n'
-                '        out[i] = _mbim_message_read_${name_underscore}_struct (self, offset, NULL, &inner_error);\n'
+                '    out = g_ptr_array_new_with_free_func ((GDestroyNotify)_${name_underscore}_free);\n'
                 '\n'
-                '    if (!inner_error) {\n'
-                '        *out_array = out;\n'
-                '        return TRUE;\n'
+                '    for (i = 0; i < array_size; i++, offset += ${struct_size}) {\n'
+                '        ${name} *array_item;\n'
+                '\n'
+                '        array_item = _mbim_message_read_${name_underscore}_struct (self, offset, NULL, error);\n'
+                '        if (!array_item)\n'
+                '            return FALSE;\n'
+                '        g_ptr_array_add (out, array_item);\n'
                 '    }\n'
                 '\n'
-                '    ${name_underscore}_array_free (out);\n'
-                '    g_propagate_error (error, inner_error);\n'
-                '    return FALSE;\n'
+                '    g_ptr_array_add (out, NULL);\n'
+                '    *out_array = (${name}Array *) g_ptr_array_free (g_steal_pointer (&out), FALSE);\n'
+                '    return TRUE;\n'
                 '}\n')
             cfile.write(string.Template(template).substitute(translations))
 
@@ -821,8 +882,7 @@ class Struct:
                 '    ${name}Array **out_array,\n'
                 '    GError **error)\n'
                 '{\n'
-                '    GError *inner_error = NULL;\n'
-                '    ${name}Array *out;\n'
+                '    g_autoptr(GPtrArray) out = NULL;\n'
                 '    guint32 i;\n'
                 '    guint32 offset;\n'
                 '\n'
@@ -831,24 +891,25 @@ class Struct:
                 '        return TRUE;\n'
                 '    }\n'
                 '\n'
-                '    out = g_new0 (${name} *, array_size + 1);\n'
+                '    out = g_ptr_array_new_with_free_func ((GDestroyNotify)_${name_underscore}_free);\n'
                 '\n'
                 '    offset = relative_offset_array_start;\n'
-                '    for (i = 0; !inner_error && (i < array_size); i++, offset += 8) {\n'
+                '    for (i = 0; i < array_size; i++, offset += 8) {\n'
                 '        guint32 tmp_offset;\n'
+                '        ${name} *array_item;\n'
                 '\n'
-                '        if (_mbim_message_read_guint32 (self, offset, &tmp_offset, &inner_error))\n'
-                '            out[i] = _mbim_message_read_${name_underscore}_struct (self, tmp_offset, NULL, &inner_error);\n'
+                '        if (!_mbim_message_read_guint32 (self, offset, &tmp_offset, error)) \n'
+                '            return FALSE;\n'
+                '\n'
+                '        array_item = _mbim_message_read_${name_underscore}_struct (self, tmp_offset, NULL, error);\n'
+                '        if (!array_item)\n'
+                '            return FALSE;\n'
+                '        g_ptr_array_add (out, array_item);\n'
                 '    }\n'
                 '\n'
-                '    if (!inner_error) {\n'
-                '        *out_array = out;\n'
-                '        return TRUE;\n'
-                '    }\n'
-                '\n'
-                '    ${name_underscore}_array_free (out);\n'
-                '    g_propagate_error (error, inner_error);\n'
-                '    return FALSE;\n'
+                '    g_ptr_array_add (out, NULL);\n'
+                '    *out_array = (${name}Array *) g_ptr_array_free (g_steal_pointer (&out), FALSE);\n'
+                '    return TRUE;\n'
                 '}\n')
             cfile.write(string.Template(template).substitute(translations))
 
@@ -863,12 +924,12 @@ class Struct:
                 '    ${name}Array **out_array,\n'
                 '    GError **error)\n'
                 '{\n'
-                '    GError *inner_error = NULL;\n'
-                '    ${name}Array *out;\n'
+                '    g_autoptr(GPtrArray) out = NULL;\n'
                 '    guint32 i;\n'
                 '    guint32 intermediate_struct_offset;\n'
                 '    guint32 intermediate_struct_size;\n'
                 '    guint32 array_size;\n'
+                '    guint32 bytes_read = 0;\n'
                 '\n'
                 '    if (!_mbim_message_read_guint32 (self, offset, &intermediate_struct_offset, error))\n'
                 '        return FALSE;\n'
@@ -895,21 +956,21 @@ class Struct:
                 '\n'
                 '    intermediate_struct_offset += 4;\n'
                 '\n'
-                '    out = g_new0 (${name} *, array_size + 1);\n'
+                '    out = g_ptr_array_new_with_free_func ((GDestroyNotify)_${name_underscore}_free);\n'
                 '\n'
-                '    for (i = 0; !inner_error && (i < array_size); i++, intermediate_struct_offset += ${struct_size}) {\n'
-                '        out[i] = _mbim_message_read_${name_underscore}_struct (self, intermediate_struct_offset, NULL, &inner_error);\n'
+                '    for (i = 0; i < array_size; i++, intermediate_struct_offset += bytes_read) {\n'
+                '        ${name} *array_item;\n'
+                '\n'
+                '        array_item = _mbim_message_read_${name_underscore}_struct (self, intermediate_struct_offset, &bytes_read, error);\n'
+                '        if (!array_item)\n'
+                '            return FALSE;\n'
+                '        g_ptr_array_add (out, array_item);\n'
                 '    }\n'
                 '\n'
-                '    if (!inner_error) {\n'
-                '        *out_array_size = array_size;\n'
-                '        *out_array = out;\n'
-                '        return TRUE;\n'
-                '    }\n'
-                '\n'
-                '    ${name_underscore}_array_free (out);\n'
-                '    g_propagate_error (error, inner_error);\n'
-                '    return FALSE;\n'
+                '    g_ptr_array_add (out, NULL);\n'
+                '    *out_array_size = array_size;\n'
+                '    *out_array = (${name}Array *) g_ptr_array_free (g_steal_pointer (&out), FALSE);\n'
+                '    return TRUE;\n'
                 '}\n')
             cfile.write(string.Template(template).substitute(translations))
 

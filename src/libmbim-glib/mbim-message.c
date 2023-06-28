@@ -240,6 +240,12 @@ _mbim_message_validate_complete_fragment (const MbimMessage  *self,
     gsize message_size = 0;
     gsize message_header_size = 0;
 
+    if (MBIM_MESSAGE_FRAGMENT_GET_CURRENT (self) != 0) {
+        g_set_error (error, MBIM_CORE_ERROR, MBIM_CORE_ERROR_INVALID_MESSAGE,
+                     "Invalid current fragment in complete message");
+        return FALSE;
+    }
+
     /* Before reading the information buffer length we must validate that the
      * message type header is readable. */
     switch (MBIM_MESSAGE_GET_MESSAGE_TYPE (self)) {
@@ -308,19 +314,10 @@ _mbim_message_validate_complete_fragment (const MbimMessage  *self,
     return TRUE;
 }
 
-static gboolean
-_mbim_message_validate_fragment (const MbimMessage  *self,
-                                 GError            **error)
-{
-    if (MBIM_MESSAGE_FRAGMENT_GET_TOTAL (self) > 1)
-        return _mbim_message_validate_partial_fragment (self, error);
-
-    return _mbim_message_validate_complete_fragment (self, error);
-}
-
 gboolean
-mbim_message_validate (const MbimMessage  *self,
-                       GError            **error)
+_mbim_message_validate_internal (const MbimMessage  *self,
+                                 gboolean            allow_fragment,
+                                 GError            **error)
 {
     if (!_mbim_message_validate_type_header (self, error))
         return FALSE;
@@ -328,7 +325,29 @@ mbim_message_validate (const MbimMessage  *self,
     if (!MBIM_MESSAGE_IS_FRAGMENT (self))
         return TRUE;
 
-    return _mbim_message_validate_fragment (self, error);
+    if (MBIM_MESSAGE_FRAGMENT_GET_TOTAL (self) > 1) {
+        if (allow_fragment)
+            return _mbim_message_validate_partial_fragment (self, error);
+
+        g_set_error (error, MBIM_CORE_ERROR, MBIM_CORE_ERROR_INVALID_MESSAGE,
+                     "Incomplete partial fragment message");
+        return FALSE;
+    }
+
+    if (MBIM_MESSAGE_FRAGMENT_GET_TOTAL (self) == 1)
+        return _mbim_message_validate_complete_fragment (self, error);
+
+    g_set_error (error, MBIM_CORE_ERROR, MBIM_CORE_ERROR_INVALID_MESSAGE,
+                 "Invalid total fragment number");
+    return FALSE;
+}
+
+gboolean
+mbim_message_validate (const MbimMessage  *self,
+                       GError            **error)
+{
+    /* No fragments allowed in the API message validation */
+    return _mbim_message_validate_internal (self, FALSE, error);
 }
 
 /*****************************************************************************/
@@ -527,6 +546,7 @@ _mbim_message_read_string (const MbimMessage   *self,
                            guint32              relative_offset,
                            MbimStringEncoding   encoding,
                            gchar              **str,
+                           guint32             *bytes_read,
                            GError             **error)
 {
     guint64               required_size;
@@ -554,8 +574,13 @@ _mbim_message_read_string (const MbimMessage   *self,
                                 (information_buffer_offset + relative_offset + 4)));
     if (!size) {
         *str = NULL;
+        if (bytes_read)
+            *bytes_read = 0;
         return TRUE;
     }
+
+    if (bytes_read)
+        *bytes_read = size;
 
     required_size = (guint64)information_buffer_offset + (guint64)struct_start_offset + (guint64)offset + (guint64)size;
     if ((guint64)self->len < required_size) {
@@ -617,35 +642,33 @@ _mbim_message_read_string_array (const MbimMessage   *self,
                                  guint32              struct_start_offset,
                                  guint32              relative_offset_array_start,
                                  MbimStringEncoding   encoding,
-                                 gchar             ***array,
+                                 gchar             ***out_array,
                                  GError             **error)
 {
-    guint32  offset;
-    guint32  i;
-    GError  *inner_error = NULL;
+    guint32              offset;
+    guint32              i;
+    g_autoptr(GPtrArray) array = NULL;
 
-    g_assert (array != NULL);
+    g_assert (out_array != NULL);
 
     if (!array_size) {
-        *array = NULL;
+        *out_array = NULL;
         return TRUE;
     }
 
-    *array = g_new0 (gchar *, array_size + 1);
-    for (i = 0, offset = relative_offset_array_start;
-         i < array_size;
-         offset += 8, i++) {
+    array = g_ptr_array_new ();
+    for (i = 0, offset = relative_offset_array_start; i < array_size; offset += 8, i++) {
+        gchar *str;
+
         /* Read next string in the OL pair list */
-        if (!_mbim_message_read_string (self, struct_start_offset, offset, encoding, &((*array)[i]), &inner_error))
-            break;
+        if (!_mbim_message_read_string (self, struct_start_offset, offset, encoding, &str, NULL, error))
+            return FALSE;
+
+        g_ptr_array_add (array, str);
     }
 
-    if (inner_error) {
-        g_strfreev (*array);
-        g_propagate_error (error, inner_error);
-        return FALSE;
-    }
-
+    g_ptr_array_add (array, NULL);
+    *out_array = (gchar **) g_ptr_array_free (g_steal_pointer (&array), FALSE);
     return TRUE;
 }
 
@@ -802,8 +825,11 @@ _mbim_message_read_byte_array (const MbimMessage  *self,
     if (!has_offset && !has_length) {
         /* If array size is requested, it's case (e) */
         if (array_size) {
-            /* no need to validate required size, as it's implicitly validated based on the message
-             * length */
+            if ((guint64)self->len < (information_buffer_offset + relative_offset)) {
+                g_set_error (error, MBIM_CORE_ERROR, MBIM_CORE_ERROR_INVALID_MESSAGE,
+                             "cannot compute byte array length: wrong offsets");
+                return FALSE;
+            }
             *array_size = self->len - (information_buffer_offset + relative_offset);
         } else {
             guint64 required_size;
@@ -1917,7 +1943,7 @@ mbim_message_get_printable_full (const MbimMessage  *self,
 
     g_return_val_if_fail (self != NULL, NULL);
     g_return_val_if_fail (line_prefix != NULL, NULL);
-    g_return_val_if_fail (mbim_message_validate (self, NULL), NULL);
+    g_return_val_if_fail (_mbim_message_validate_internal (self, TRUE, NULL), NULL);
 
     if (mbimex_version_major > 3) {
         g_set_error (error, MBIM_CORE_ERROR, MBIM_CORE_ERROR_INVALID_ARGS,

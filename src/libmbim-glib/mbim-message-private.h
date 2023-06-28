@@ -119,6 +119,13 @@ struct full_message {
 GByteArray *_mbim_message_allocate (MbimMessageType message_type, guint32 transaction_id, guint32 additional_size);
 
 /*****************************************************************************/
+/* Message validation */
+
+gboolean _mbim_message_validate_internal (const MbimMessage  *self,
+                                          gboolean            allow_fragment,
+                                          GError            **error);
+
+/*****************************************************************************/
 /* Fragment interface */
 
 gboolean      _mbim_message_is_fragment          (const MbimMessage  *self);
@@ -303,6 +310,7 @@ gboolean _mbim_message_read_string        (const MbimMessage  *self,
                                            guint32             relative_offset,
                                            MbimStringEncoding  encoding,
                                            gchar             **str,
+                                           guint32            *bytes_read,
                                            GError            **error);
 gboolean _mbim_message_read_string_array  (const MbimMessage   *self,
                                            guint32              array_size,
