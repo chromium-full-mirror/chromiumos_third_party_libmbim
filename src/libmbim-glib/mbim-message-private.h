@@ -282,7 +282,8 @@ gboolean _mbim_message_read_byte_array    (const MbimMessage  *self,
                                            gboolean            swapped_offset_length);
 gboolean _mbim_message_read_uuid          (const MbimMessage  *self,
                                            guint32             relative_offset,
-                                           const MbimUuid    **uuid,
+                                           const MbimUuid    **uuid_ptr, /* unsafe if unaligned */
+                                           MbimUuid           *uuid_value,
                                            GError            **error);
 gboolean _mbim_message_read_guint16      (const MbimMessage  *self,
                                            guint32             relative_offset,
@@ -322,7 +323,8 @@ gboolean _mbim_message_read_string_array  (const MbimMessage   *self,
 gboolean _mbim_message_read_ipv4          (const MbimMessage  *self,
                                            guint32             relative_offset,
                                            gboolean            ref,
-                                           const MbimIPv4    **ipv4,
+                                           const MbimIPv4    **ipv4_ptr,  /* unsafe if unaligned */
+                                           MbimIPv4           *ipv4_value,
                                            GError            **error);
 gboolean _mbim_message_read_ipv4_array    (const MbimMessage  *self,
                                            guint32             array_size,
@@ -332,7 +334,8 @@ gboolean _mbim_message_read_ipv4_array    (const MbimMessage  *self,
 gboolean _mbim_message_read_ipv6          (const MbimMessage  *self,
                                            guint32             relative_offset,
                                            gboolean            ref,
-                                           const MbimIPv6    **ipv6,
+                                           const MbimIPv6    **ipv6_ptr,  /* unsafe if unaligned */
+                                           MbimIPv6           *ipv6_value,
                                            GError            **error);
 gboolean _mbim_message_read_ipv6_array    (const MbimMessage  *self,
                                            guint32             array_size,

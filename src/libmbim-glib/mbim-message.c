@@ -19,6 +19,7 @@
 #include "mbim-error-types.h"
 #include "mbim-enum-types.h"
 #include "mbim-tlv-private.h"
+#include "mbim-helpers.h"
 
 #include "mbim-basic-connect.h"
 #include "mbim-auth.h"
@@ -408,10 +409,7 @@ _mbim_message_read_guint16 (const MbimMessage  *self,
         return FALSE;
     }
 
-    *value = GUINT16_FROM_LE (G_STRUCT_MEMBER (
-                                  guint16,
-                                  self->data,
-                                  (information_buffer_offset + relative_offset)));
+    *value = mbim_helpers_read_unaligned_guint16 (self->data + information_buffer_offset + relative_offset);
     return TRUE;
 }
 
@@ -436,10 +434,7 @@ _mbim_message_read_guint32 (const MbimMessage  *self,
         return FALSE;
     }
 
-    *value = GUINT32_FROM_LE (G_STRUCT_MEMBER (
-                                  guint32,
-                                  self->data,
-                                  (information_buffer_offset + relative_offset)));
+    *value = mbim_helpers_read_unaligned_guint32 (self->data + information_buffer_offset + relative_offset);
     return TRUE;
 }
 
@@ -464,10 +459,7 @@ _mbim_message_read_gint32 (const MbimMessage  *self,
         return FALSE;
     }
 
-    *value = GINT32_FROM_LE (G_STRUCT_MEMBER (
-                                 gint32,
-                                 self->data,
-                                 (information_buffer_offset + relative_offset)));
+    *value = mbim_helpers_read_unaligned_guint32 (self->data + information_buffer_offset + relative_offset);
     return TRUE;
 }
 
@@ -500,14 +492,8 @@ _mbim_message_read_guint32_array (const MbimMessage  *self,
     }
 
     *array = g_new (guint32, array_size + 1);
-    for (i = 0; i < array_size; i++) {
-        (*array)[i] = GUINT32_FROM_LE (G_STRUCT_MEMBER (
-                                           guint32,
-                                           self->data,
-                                           (information_buffer_offset +
-                                            relative_offset_array_start +
-                                            (4 * i))));
-    }
+    for (i = 0; i < array_size; i++)
+        (*array)[i] = mbim_helpers_read_unaligned_guint32 (self->data + information_buffer_offset + relative_offset_array_start + (4 * i));
     (*array)[array_size] = 0;
     return TRUE;
 }
@@ -533,10 +519,7 @@ _mbim_message_read_guint64 (const MbimMessage  *self,
         return FALSE;
     }
 
-    *value = GUINT64_FROM_LE (G_STRUCT_MEMBER (
-                                  guint64,
-                                  self->data,
-                                  (information_buffer_offset + relative_offset)));
+    *value = mbim_helpers_read_unaligned_guint64 (self->data + information_buffer_offset + relative_offset);
     return TRUE;
 }
 
@@ -549,10 +532,11 @@ _mbim_message_read_string (const MbimMessage   *self,
                            guint32             *bytes_read,
                            GError             **error)
 {
-    guint64               required_size;
-    guint32               offset;
-    guint32               size;
-    guint32               information_buffer_offset;
+    g_autofree gchar *tmp = NULL;
+    guint64           required_size;
+    guint32           offset;
+    guint32           size;
+    guint32           information_buffer_offset;
 
     information_buffer_offset = _mbim_message_get_information_buffer_offset (self);
 
@@ -564,14 +548,8 @@ _mbim_message_read_string (const MbimMessage   *self,
         return FALSE;
     }
 
-    offset = GUINT32_FROM_LE (G_STRUCT_MEMBER (
-                                  guint32,
-                                  self->data,
-                                  (information_buffer_offset + relative_offset)));
-    size = GUINT32_FROM_LE (G_STRUCT_MEMBER (
-                                guint32,
-                                self->data,
-                                (information_buffer_offset + relative_offset + 4)));
+    offset = mbim_helpers_read_unaligned_guint32 (self->data + information_buffer_offset + relative_offset);
+    size = mbim_helpers_read_unaligned_guint32 (self->data + information_buffer_offset + relative_offset + 4);
     if (!size) {
         *str = NULL;
         if (bytes_read)
@@ -592,47 +570,43 @@ _mbim_message_read_string (const MbimMessage   *self,
 
     if (encoding == MBIM_STRING_ENCODING_UTF16) {
         g_autofree gunichar2 *utf16d = NULL;
-        const gunichar2      *utf16 = NULL;
 
-        utf16 = (const gunichar2 *) G_STRUCT_MEMBER_P (self->data, (information_buffer_offset + struct_start_offset + offset));
+        /* Always duplicate to avoid memory alignment issues */
+        utf16d = g_memdup (self->data + information_buffer_offset + struct_start_offset + offset, size);
 
         /* For BE systems, convert from LE to BE */
         if (G_BYTE_ORDER == G_BIG_ENDIAN) {
             guint i;
 
-            utf16d = (gunichar2 *) g_malloc (size);
             for (i = 0; i < (size / 2); i++)
-                utf16d[i] = GUINT16_FROM_LE (utf16[i]);
+                utf16d[i] = GUINT16_FROM_LE (utf16d[i]);
         }
 
-        *str = g_utf16_to_utf8 (utf16d ? utf16d : utf16,
-                                size / 2,
-                                NULL,
-                                NULL,
-                                error);
-
-        if (!(*str)) {
+        tmp = g_utf16_to_utf8 (utf16d, size / 2, NULL, NULL, error);
+        if (!tmp) {
             g_prefix_error (error, "Error converting string to UTF-8: ");
             return FALSE;
         }
+        size = strlen (tmp);
     } else if (encoding == MBIM_STRING_ENCODING_UTF8) {
         const gchar *utf8;
 
-        utf8 = (const gchar *) G_STRUCT_MEMBER_P (self->data, (information_buffer_offset + struct_start_offset + offset));
+        utf8 = (const gchar *) (self->data + information_buffer_offset + struct_start_offset + offset);
 
         /* size may include the trailing NUL byte, skip it from the check */
         while (size > 0 && utf8[size - 1] == '\0')
             size--;
 
-        if (!g_utf8_validate (utf8, size, NULL)) {
-            g_set_error (error, G_IO_ERROR, G_IO_ERROR_INVALID_DATA, "Error validating UTF-8 string");
-            return FALSE;
-        }
-
-        *str = g_strndup (utf8, size);
+        tmp = g_strndup (utf8, size);
     } else
         g_assert_not_reached ();
 
+    if (!g_utf8_validate (tmp, size, NULL)) {
+        g_set_error (error, G_IO_ERROR, G_IO_ERROR_INVALID_DATA, "Error validating UTF-8 string");
+        return FALSE;
+    }
+
+    *str = g_steal_pointer (&tmp);
     return TRUE;
 }
 
@@ -663,6 +637,13 @@ _mbim_message_read_string_array (const MbimMessage   *self,
         /* Read next string in the OL pair list */
         if (!_mbim_message_read_string (self, struct_start_offset, offset, encoding, &str, NULL, error))
             return FALSE;
+
+        /* When an empty string is given as part of the array, we don't want to
+         * add the NULL pointer, we should be adding the empty string explicitly.
+         * Otherwise, if more elements are added after that one, they will leak
+         * once the GPtrArray is freed and its contents converted into a GStrv. */
+        if (!str)
+            str = g_strdup ("");
 
         g_ptr_array_add (array, str);
     }
@@ -715,25 +696,12 @@ _mbim_message_read_byte_array (const MbimMessage  *self,
 
         if (!swapped_offset_length) {
             /* (b) Offset followed by length encoding format. */
-            offset = GUINT32_FROM_LE (G_STRUCT_MEMBER (
-                                      guint32,
-                                      self->data,
-                                      (information_buffer_offset + relative_offset)));
-            *array_size = GUINT32_FROM_LE (G_STRUCT_MEMBER (
-                                           guint32,
-                                           self->data,
-                                           (information_buffer_offset + relative_offset + 4)));
+            offset = mbim_helpers_read_unaligned_guint32 (self->data + information_buffer_offset + relative_offset);
+            *array_size = mbim_helpers_read_unaligned_guint32 (self->data + information_buffer_offset + relative_offset + 4);
         } else {
             /* (b) length followed by offset encoding format. */
-            *array_size = GUINT32_FROM_LE (G_STRUCT_MEMBER (
-                                           guint32,
-                                           self->data,
-                                           (information_buffer_offset + relative_offset)));
-
-            offset = GUINT32_FROM_LE (G_STRUCT_MEMBER (
-                                      guint32,
-                                      self->data,
-                                      (information_buffer_offset + relative_offset + 4)));
+            *array_size = mbim_helpers_read_unaligned_guint32 (self->data + information_buffer_offset + relative_offset);
+            offset = mbim_helpers_read_unaligned_guint32 (self->data + information_buffer_offset + relative_offset + 4);
         }
 
         /* requires array_size bytes in offset */
@@ -745,8 +713,7 @@ _mbim_message_read_byte_array (const MbimMessage  *self,
             return FALSE;
         }
 
-        *array = (const guint8 *) G_STRUCT_MEMBER_P (self->data,
-                                                     (information_buffer_offset + struct_start_offset + offset));
+        *array = self->data + information_buffer_offset + struct_start_offset + offset;
         return TRUE;
     }
 
@@ -766,10 +733,7 @@ _mbim_message_read_byte_array (const MbimMessage  *self,
             return FALSE;
         }
 
-        *array_size = GUINT32_FROM_LE (G_STRUCT_MEMBER (
-                                           guint32,
-                                           self->data,
-                                           (information_buffer_offset + relative_offset)));
+        *array_size = mbim_helpers_read_unaligned_guint32 (self->data + information_buffer_offset + relative_offset);
 
         /* requires array_size bytes in after the array_size variable */
         required_size += (guint64)(*array_size);
@@ -780,8 +744,7 @@ _mbim_message_read_byte_array (const MbimMessage  *self,
             return FALSE;
         }
 
-        *array = (const guint8 *) G_STRUCT_MEMBER_P (self->data,
-                                                     (information_buffer_offset + relative_offset + 4));
+        *array = self->data + information_buffer_offset + relative_offset + 4;
         return TRUE;
     }
 
@@ -801,10 +764,7 @@ _mbim_message_read_byte_array (const MbimMessage  *self,
             return FALSE;
         }
 
-        offset = GUINT32_FROM_LE (G_STRUCT_MEMBER (
-                                      guint32,
-                                      self->data,
-                                      (information_buffer_offset + relative_offset)));
+        offset = mbim_helpers_read_unaligned_guint32 (self->data + information_buffer_offset + relative_offset);
 
         /* requires explicit_array_size bytes in offset */
         required_size = (guint64)information_buffer_offset + (guint64)struct_start_offset + (guint64)offset + (guint64)explicit_array_size;
@@ -815,8 +775,7 @@ _mbim_message_read_byte_array (const MbimMessage  *self,
             return FALSE;
         }
 
-        *array = (const guint8 *) G_STRUCT_MEMBER_P (self->data,
-                                                     (information_buffer_offset + struct_start_offset + offset));
+        *array = self->data + information_buffer_offset + struct_start_offset + offset;
         return TRUE;
     }
 
@@ -844,8 +803,7 @@ _mbim_message_read_byte_array (const MbimMessage  *self,
             }
         }
 
-        *array = (const guint8 *) G_STRUCT_MEMBER_P (self->data,
-                                                     (information_buffer_offset + relative_offset));
+        *array = self->data + information_buffer_offset + relative_offset;
         return TRUE;
     }
 
@@ -855,13 +813,15 @@ _mbim_message_read_byte_array (const MbimMessage  *self,
 gboolean
 _mbim_message_read_uuid (const MbimMessage  *self,
                          guint32             relative_offset,
-                         const MbimUuid    **uuid,
+                         const MbimUuid    **uuid_ptr, /* unsafe if unaligned */
+                         MbimUuid           *uuid_value,
                          GError            **error)
 {
     guint64 required_size;
     guint32 information_buffer_offset;
 
-    g_assert (uuid);
+    g_assert (uuid_ptr || uuid_value);
+    g_assert (!(uuid_ptr && uuid_value));
 
     information_buffer_offset = _mbim_message_get_information_buffer_offset (self);
 
@@ -873,8 +833,23 @@ _mbim_message_read_uuid (const MbimMessage  *self,
         return FALSE;
     }
 
-    *uuid = (const MbimUuid *) G_STRUCT_MEMBER_P (self->data,
-                                                  (information_buffer_offset + relative_offset));
+    /* This explicit cast to a MbimUuid may fail if the contents are not correctly aligned,
+     * but so far in the currently supported MBIM messages where a MbimUuid is returned
+     * the 32bit alignment is ensured:
+     * - MBIM Basic Connect "Connect" response.
+     * - MBIM Basic Connect "Connect" notification.
+     * - MBIM MS Basic Connect v3 "Connect" response.
+     * - MBIM MS Basic Connect v3 "Connect" notification.
+     * - MBIM MS Firmware ID "Get" response.
+     *
+     * We keep this limitation instead of making it an alignment-safe read because otherwise
+     * it would require new API/ABI compat methods.
+     */
+    if (uuid_ptr)
+        *uuid_ptr = (const MbimUuid *) (self->data + information_buffer_offset + relative_offset);
+
+    if (uuid_value)
+        memcpy (uuid_value, self->data + information_buffer_offset + relative_offset, 16);
     return TRUE;
 }
 
@@ -882,18 +857,25 @@ gboolean
 _mbim_message_read_ipv4 (const MbimMessage  *self,
                          guint32             relative_offset,
                          gboolean            ref,
-                         const MbimIPv4    **ipv4,
+                         const MbimIPv4    **ipv4_ptr,  /* unsafe if unaligned */
+                         MbimIPv4           *ipv4_value,
                          GError            **error)
 {
     guint64 required_size;
     guint32 information_buffer_offset;
     guint32 offset;
 
-    g_assert (ipv4 != NULL);
+    g_assert (ipv4_ptr || ipv4_value);
+    g_assert (!(ipv4_ptr && ipv4_value));
 
     information_buffer_offset = _mbim_message_get_information_buffer_offset (self);
 
     if (ref) {
+        /* Read operations with a reference are expected only on certain message
+         * API methods, where the output is required to be a pointer as well, to
+         * indicate whether the field exists or not. */
+        g_assert (ipv4_ptr);
+
         required_size = (guint64)information_buffer_offset + (guint64)relative_offset + 4;
         if ((guint64)self->len < required_size) {
             g_set_error (error, MBIM_CORE_ERROR, MBIM_CORE_ERROR_INVALID_MESSAGE,
@@ -902,11 +884,9 @@ _mbim_message_read_ipv4 (const MbimMessage  *self,
             return FALSE;
         }
 
-        offset = GUINT32_FROM_LE (G_STRUCT_MEMBER (guint32,
-                                                   self->data,
-                                                   (information_buffer_offset + relative_offset)));
+        offset = mbim_helpers_read_unaligned_guint32 (self->data + information_buffer_offset + relative_offset);
         if (!offset) {
-            *ipv4 = NULL;
+            *ipv4_ptr = NULL;
             return TRUE;
         }
     } else
@@ -920,8 +900,20 @@ _mbim_message_read_ipv4 (const MbimMessage  *self,
         return FALSE;
     }
 
-    *ipv4 = (const MbimIPv4 *) G_STRUCT_MEMBER_P (self->data,
-                                                  (information_buffer_offset + offset));
+    /* This explicit cast to a MbimIPv4 may fail if the contents are not correctly aligned,
+     * but so far in the currently supported MBIM messages where a MbimIPv4 is returned
+     * the 32bit alignment is ensured:
+     * - MBIM Basic Connect "IP Configuration" response.
+     * - MBIM Basic Connect "IP Configuration" notification.
+     *
+     * We keep this limitation instead of making it an alignment-safe read because otherwise
+     * it would require new API/ABI compat methods.
+     */
+    if (ipv4_ptr)
+        *ipv4_ptr = (const MbimIPv4 *) (self->data +information_buffer_offset + offset);
+
+    if (ipv4_value)
+        memcpy (ipv4_value, self->data +information_buffer_offset + offset, 4);
     return TRUE;
 }
 
@@ -954,10 +946,7 @@ _mbim_message_read_ipv4_array (const MbimMessage  *self,
         return FALSE;
     }
 
-    offset = GUINT32_FROM_LE (G_STRUCT_MEMBER (
-                                  guint32,
-                                  self->data,
-                                  (information_buffer_offset + relative_offset_array_start)));
+    offset = mbim_helpers_read_unaligned_guint32 (self->data + information_buffer_offset + relative_offset_array_start);
 
     required_size = (guint64)information_buffer_offset + (guint64)offset + (4 * (guint64)array_size);
     if ((guint64)self->len < required_size) {
@@ -968,12 +957,8 @@ _mbim_message_read_ipv4_array (const MbimMessage  *self,
     }
 
     *array = g_new (MbimIPv4, array_size);
-    for (i = 0; i < array_size; i++, offset += 4) {
-        memcpy (&((*array)[i]),
-                G_STRUCT_MEMBER_P (self->data,
-                                   (information_buffer_offset + offset)),
-                4);
-    }
+    for (i = 0; i < array_size; i++, offset += 4)
+        memcpy (&((*array)[i]), self->data + information_buffer_offset + offset, 4);
 
     return TRUE;
 }
@@ -982,18 +967,25 @@ gboolean
 _mbim_message_read_ipv6 (const MbimMessage  *self,
                          guint32             relative_offset,
                          gboolean            ref,
-                         const MbimIPv6    **ipv6,
+                         const MbimIPv6    **ipv6_ptr,  /* unsafe if unaligned */
+                         MbimIPv6           *ipv6_value,
                          GError            **error)
 {
     guint64 required_size;
     guint32 information_buffer_offset;
     guint32 offset;
 
-    g_assert (ipv6 != NULL);
+    g_assert (ipv6_ptr || ipv6_value);
+    g_assert (!(ipv6_ptr && ipv6_value));
 
     information_buffer_offset = _mbim_message_get_information_buffer_offset (self);
 
     if (ref) {
+        /* Read operations with a reference are expected only on certain message
+         * API methods, where the output is required to be a pointer as well, to
+         * indicate whether the field exists or not. */
+        g_assert (ipv6_ptr);
+
         required_size = (guint64)information_buffer_offset + (guint64)relative_offset + 4;
         if ((guint64)self->len < required_size) {
             g_set_error (error, MBIM_CORE_ERROR, MBIM_CORE_ERROR_INVALID_MESSAGE,
@@ -1002,11 +994,9 @@ _mbim_message_read_ipv6 (const MbimMessage  *self,
             return FALSE;
         }
 
-        offset = GUINT32_FROM_LE (G_STRUCT_MEMBER (guint32,
-                                                   self->data,
-                                                   (information_buffer_offset + relative_offset)));
+        offset = mbim_helpers_read_unaligned_guint32 (self->data + information_buffer_offset + relative_offset);
         if (!offset) {
-            *ipv6 = NULL;
+            *ipv6_ptr = NULL;
             return TRUE;
         }
     } else
@@ -1020,8 +1010,20 @@ _mbim_message_read_ipv6 (const MbimMessage  *self,
         return FALSE;
     }
 
-    *ipv6 = (const MbimIPv6 *) G_STRUCT_MEMBER_P (self->data,
-                                                  (information_buffer_offset + offset));
+    /* This explicit cast to a MbimIPv6 may fail if the contents are not correctly aligned,
+     * but so far in the currently supported MBIM messages where a MbimIPv6 is returned
+     * the 32bit alignment is ensured:
+     * - MBIM Basic Connect "IP Configuration" response.
+     * - MBIM Basic Connect "IP Configuration" notification.
+     *
+     * We keep this limitation instead of making it an alignment-safe read because otherwise
+     * it would require new API/ABI compat methods.
+     */
+    if (ipv6_ptr)
+        *ipv6_ptr = (const MbimIPv6 *) (self->data +information_buffer_offset + offset);
+
+    if (ipv6_value)
+        memcpy (ipv6_value, self->data +information_buffer_offset + offset, 16);
     return TRUE;
 }
 
@@ -1054,10 +1056,7 @@ _mbim_message_read_ipv6_array (const MbimMessage  *self,
         return FALSE;
     }
 
-    offset = GUINT32_FROM_LE (G_STRUCT_MEMBER (
-                                  guint32,
-                                  self->data,
-                                  (information_buffer_offset + relative_offset_array_start)));
+    offset = mbim_helpers_read_unaligned_guint32 (self->data + information_buffer_offset + relative_offset_array_start);
 
     required_size = (guint64)information_buffer_offset + (guint64)offset + (16 * (guint64)array_size);
     if ((guint64)self->len < required_size) {
@@ -1068,12 +1067,8 @@ _mbim_message_read_ipv6_array (const MbimMessage  *self,
     }
 
     *array = g_new (MbimIPv6, array_size);
-    for (i = 0; i < array_size; i++, offset += 16) {
-        memcpy (&((*array)[i]),
-                G_STRUCT_MEMBER_P (self->data,
-                                   (information_buffer_offset + offset)),
-                16);
-    }
+    for (i = 0; i < array_size; i++, offset += 16)
+        memcpy (&((*array)[i]), self->data + information_buffer_offset + offset, 16);
 
     return TRUE;
 }
@@ -1093,7 +1088,7 @@ _mbim_message_read_tlv (const MbimMessage  *self,
 
     information_buffer_offset = _mbim_message_get_information_buffer_offset (self);
     tlv_offset = (guint64)information_buffer_offset + (guint64)relative_offset;
-    tlv_raw = (const guint8 *) G_STRUCT_MEMBER_P (self->data, tlv_offset);
+    tlv_raw = self->data + tlv_offset;
     tlv_size = ((guint64)sizeof (struct tlv) +
                 (guint64)GUINT32_FROM_LE (((struct tlv *)tlv_raw)->data_length) +
                 (guint64)((struct tlv *)tlv_raw)->padding_length);
@@ -1189,7 +1184,7 @@ _mbim_message_read_tlv_list (const MbimMessage  *self,
     }
 
     tlv_list_raw_size = self->len - (guint32)tlv_list_offset;
-    tlv_list_raw = (const guint8 *) G_STRUCT_MEMBER_P (self->data, tlv_list_offset);
+    tlv_list_raw = self->data + tlv_list_offset;
 
     while ((tlv_list_raw_size > 0) && !inner_error) {
         MbimTlv *tlv;
